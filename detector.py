@@ -12,10 +12,12 @@ from queue import Queue
 from typing import Any, Protocol, Sequence
 
 from ergonomics import (
+    EyeGazeTracker,
     SitDurationTracker,
     compute_ergonomic_score,
     estimate_face_camera_distance,
     eye_strain_risk,
+    is_facing_camera,
 )
 from filter import TemporalFilter
 
@@ -434,6 +436,11 @@ def run_detection_loop(
         alert_threshold_sec=float(config.get("sit_alert_threshold_seconds", 25 * 60.0)),
         cooldown_sec=float(config.get("sit_alert_cooldown_seconds", 5 * 60.0)),
     )
+    gaze_tracker = EyeGazeTracker(
+        gaze_alert_seconds=float(config.get("gaze_alert_seconds", 20 * 60.0)),
+        break_duration_seconds=float(config.get("gaze_break_seconds", 20.0)),
+        cooldown_sec=float(config.get("gaze_alert_cooldown_seconds", 60.0)),
+    )
     detector = PoseDetector(config)
 
     try:
@@ -456,6 +463,7 @@ def run_detection_loop(
             result = detector.process_frame(frame)
             person_present = not result.skipped and result.posture_score is not None
             sit_tracker.observe(person_present=person_present)
+            gaze_tracker.observe(facing_screen=person_present)
 
             result.sit_seconds = round(sit_tracker.continuous_sit_seconds, 1)
             if result.posture_score is not None:
@@ -463,6 +471,7 @@ def run_detection_loop(
                     result.posture_score,
                     continuous_sit_seconds=result.sit_seconds,
                     face_distance=result.face_distance,
+                    continuous_gaze_seconds=gaze_tracker.continuous_gaze_seconds,
                 )
 
             stats_queue.put(result)
@@ -479,6 +488,15 @@ def run_detection_loop(
                     break_alert=True,
                 )
                 signal_queue.put(break_result)
+
+            if gaze_tracker.needs_gaze_alert():
+                gaze_result = PostureResult(
+                    status="bad",
+                    issues=["20-20-20!"],
+                    sit_seconds=result.sit_seconds,
+                    ergonomic_score=result.ergonomic_score,
+                )
+                signal_queue.put(gaze_result)
 
             elapsed = time.monotonic() - started_at
             remaining = frame_interval - elapsed

@@ -4,10 +4,12 @@ import unittest
 from dataclasses import dataclass
 
 from ergonomics import (
+    EyeGazeTracker,
     SitDurationTracker,
     compute_ergonomic_score,
     estimate_face_camera_distance,
     eye_strain_risk,
+    is_facing_camera,
     sit_duration_risk,
 )
 
@@ -120,6 +122,68 @@ class SitDurationRiskTests(unittest.TestCase):
         self.assertEqual(sit_duration_risk(120 * 60), 1.0)
 
 
+class EyeGazeTrackerTests(unittest.TestCase):
+    def test_gaze_accumulates_while_facing(self) -> None:
+        clock = FakeClock()
+        tracker = EyeGazeTracker(time_fn=clock)
+
+        tracker.observe(facing_screen=True)
+        clock.advance(600)
+        tracker.observe(facing_screen=True)
+
+        self.assertAlmostEqual(tracker.continuous_gaze_seconds, 600.0, delta=0.01)
+
+    def test_looking_away_resets_after_break(self) -> None:
+        clock = FakeClock()
+        tracker = EyeGazeTracker(break_duration_seconds=20, time_fn=clock)
+
+        tracker.observe(facing_screen=True)
+        clock.advance(300)
+        tracker.observe(facing_screen=True)
+        # User looks away
+        clock.advance(30)
+        tracker.observe(facing_screen=False)
+        clock.advance(5)
+        tracker.observe(facing_screen=True)
+
+        self.assertLess(tracker.continuous_gaze_seconds, 60.0)
+
+    def test_alert_fires_after_threshold(self) -> None:
+        clock = FakeClock()
+        tracker = EyeGazeTracker(
+            gaze_alert_seconds=60,
+            cooldown_sec=10,
+            time_fn=clock,
+        )
+
+        tracker.observe(facing_screen=True)
+        clock.advance(30)
+        self.assertFalse(tracker.needs_gaze_alert())
+
+        clock.advance(40)
+        tracker.observe(facing_screen=True)
+        self.assertTrue(tracker.needs_gaze_alert())
+        self.assertFalse(tracker.needs_gaze_alert())  # cooldown
+
+
+class FacingCameraTests(unittest.TestCase):
+    def test_facing_when_nose_centered(self) -> None:
+        landmarks = [FakeLandmark() for _ in range(33)]
+        landmarks[0] = FakeLandmark(x=0.50)
+        landmarks[7] = FakeLandmark(x=0.42)
+        landmarks[8] = FakeLandmark(x=0.58)
+
+        self.assertTrue(is_facing_camera(landmarks))
+
+    def test_not_facing_when_turned(self) -> None:
+        landmarks = [FakeLandmark() for _ in range(33)]
+        landmarks[0] = FakeLandmark(x=0.70)  # nose far right
+        landmarks[7] = FakeLandmark(x=0.42)
+        landmarks[8] = FakeLandmark(x=0.58)
+
+        self.assertFalse(is_facing_camera(landmarks))
+
+
 class ErgonomicScoreTests(unittest.TestCase):
     def test_score_equals_posture_when_no_other_risk(self) -> None:
         score = compute_ergonomic_score(
@@ -152,6 +216,15 @@ class ErgonomicScoreTests(unittest.TestCase):
             face_distance=0.40,
         )
         self.assertEqual(score, 0)
+
+    def test_long_gaze_penalises_score(self) -> None:
+        score = compute_ergonomic_score(
+            posture_score=90,
+            continuous_sit_seconds=0,
+            face_distance=0.10,
+            continuous_gaze_seconds=60 * 60,  # 1 soat uzluksiz tikilish
+        )
+        self.assertLess(score, 90)
 
 
 if __name__ == "__main__":

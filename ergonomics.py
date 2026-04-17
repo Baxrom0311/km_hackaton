@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Sequence
@@ -100,18 +101,81 @@ def sit_duration_risk(
     return (continuous_sit_seconds - comfort_max_seconds) / span
 
 
+def is_facing_camera(landmarks: Sequence, threshold: float = 0.12) -> bool:
+    """Foydalanuvchi kameraga qarayotganini aniqlaydi.
+
+    Burun (0) va quloqlar (7, 8) orasidagi X-simmetriyani tekshiradi.
+    Agar burun chap va o'ng quloq orasida markazlashgan bo'lsa → ekranga qarayapti.
+    """
+    nose_x = landmarks[0].x
+    left_ear_x = landmarks[7].x
+    right_ear_x = landmarks[8].x
+    mid_x = (left_ear_x + right_ear_x) / 2.0
+    return abs(nose_x - mid_x) < threshold
+
+
+@dataclass(slots=True)
+class EyeGazeTracker:
+    """Foydalanuvchining ekranga uzluksiz tikilish vaqtini kuzatadi.
+
+    20-20-20 qoidasi: har 20 daqiqada, 20 soniya, 20 futga (6 m) uzoqqa qarang.
+    Agar foydalanuvchi `gaze_alert_seconds` davomida uzluksiz ekranga
+    qarasa, ogohlantirish beriladi.
+    """
+
+    gaze_alert_seconds: float = 20 * 60.0  # 20 daqiqa
+    break_duration_seconds: float = 20.0   # 20 sek tanaffus
+    cooldown_sec: float = 60.0
+    time_fn: Callable[[], float] = time.monotonic
+    gaze_started_at: float | None = field(default=None, init=False)
+    last_seen_at: float | None = field(default=None, init=False)
+    last_alert_at: float = field(default=float("-inf"), init=False)
+
+    def observe(self, *, facing_screen: bool) -> None:
+        now = self.time_fn()
+        if facing_screen:
+            if self.gaze_started_at is None:
+                self.gaze_started_at = now
+            self.last_seen_at = now
+            return
+
+        # Yuzini burmasa break_duration_seconds kutadi, keyin reset
+        if self.gaze_started_at is not None and self.last_seen_at is not None:
+            if (now - self.last_seen_at) >= self.break_duration_seconds:
+                self.gaze_started_at = None
+                self.last_seen_at = None
+
+    @property
+    def continuous_gaze_seconds(self) -> float:
+        if self.gaze_started_at is None:
+            return 0.0
+        return max(0.0, self.time_fn() - self.gaze_started_at)
+
+    def needs_gaze_alert(self) -> bool:
+        gaze_sec = self.continuous_gaze_seconds
+        if gaze_sec < self.gaze_alert_seconds:
+            return False
+        now = self.time_fn()
+        if (now - self.last_alert_at) < self.cooldown_sec:
+            return False
+        self.last_alert_at = now
+        return True
+
+
 def compute_ergonomic_score(
     posture_score: float,
     *,
     continuous_sit_seconds: float,
     face_distance: float | None,
-    sit_weight: float = 0.30,
-    eye_weight: float = 0.20,
+    continuous_gaze_seconds: float = 0.0,
+    sit_weight: float = 0.25,
+    eye_weight: float = 0.15,
+    gaze_weight: float = 0.10,
 ) -> int:
-    """Posture, o'tirish vaqti va ko'z masofasi asosida 0..100 ergonomik ball.
+    """Posture, o'tirish vaqti, ko'z masofasi va gaze vaqti asosida 0..100 ergonomik ball.
 
     Yuqoriroq ball — yaxshi ergonomika. Posture score asos sifatida
-    olinadi, sit-duration va eye-strain xavflari penalti sifatida ayriladi.
+    olinadi, sit-duration, eye-strain va gaze-time xavflari penalti sifatida ayriladi.
     """
     base = max(0.0, min(100.0, float(posture_score)))
     sit_penalty = sit_duration_risk(continuous_sit_seconds) * 100.0 * sit_weight
@@ -120,5 +184,12 @@ def compute_ergonomic_score(
         if face_distance is not None
         else 0.0
     )
-    score = base - sit_penalty - eye_penalty
+    # Gaze penalty: 20 daqiqagacha 0, 60 daqiqada max
+    gaze_risk = sit_duration_risk(
+        continuous_gaze_seconds,
+        comfort_max_seconds=20 * 60.0,
+        danger_min_seconds=60 * 60.0,
+    )
+    gaze_penalty = gaze_risk * 100.0 * gaze_weight
+    score = base - sit_penalty - eye_penalty - gaze_penalty
     return max(0, min(100, round(score)))

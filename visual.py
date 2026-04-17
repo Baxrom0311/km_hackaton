@@ -17,9 +17,12 @@ from pathlib import Path
 from typing import Any
 
 from detector import REQUIRED_LANDMARKS, PoseDetector, PostureResult, analyze_posture
+from dimmer import ScreenDimmer
 from ergonomics import (
+    EyeGazeTracker,
     SitDurationTracker,
     compute_ergonomic_score,
+    is_facing_camera,
 )
 from filter import TemporalFilter
 from notifier import send_notification
@@ -95,7 +98,7 @@ def _draw_help_overlay(cv2: Any, frame: Any, controls: VisualControls) -> None:
         )
 
 
-def _draw_overlay(cv2: Any, frame: Any, result: PostureResult, fps: float, controls: VisualControls) -> None:
+def _draw_overlay(cv2: Any, frame: Any, result: PostureResult, fps: float, controls: VisualControls, gaze_seconds: float = 0.0) -> None:
     height, width = frame.shape[:2]
     status = result.status
     color = (40, 180, 60) if status == "good" else (40, 40, 220) if status == "bad" else (160, 160, 160)
@@ -109,7 +112,7 @@ def _draw_overlay(cv2: Any, frame: Any, result: PostureResult, fps: float, contr
         return
 
     # Top-left info paneli
-    panel_height = 170
+    panel_height = 192
     overlay = frame.copy()
     cv2.rectangle(overlay, (0, 0), (360, panel_height), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
@@ -136,9 +139,12 @@ def _draw_overlay(cv2: Any, frame: Any, result: PostureResult, fps: float, contr
     put(f"Ergonomic:     {result.ergonomic_score if result.ergonomic_score is not None else '-'}", 2)
     sit_min = result.sit_seconds / 60.0
     put(f"Sit duration:  {sit_min:6.1f} min", 3)
-    put(f"Head angle:    {result.head_angle if result.head_angle is not None else '-'} deg", 4)
-    put(f"Face dist:     {result.face_distance if result.face_distance is not None else '-'}", 5)
-    put(f"FPS: {fps:5.1f}", 6, scale=0.5, color_text=(180, 220, 255))
+    gaze_min = gaze_seconds / 60.0
+    gaze_color = (50, 220, 255) if gaze_min >= 18.0 else (255, 255, 255)
+    put(f"Eye gaze:      {gaze_min:6.1f} min", 4, color_text=gaze_color)
+    put(f"Head angle:    {result.head_angle if result.head_angle is not None else '-'} deg", 5)
+    put(f"Face dist:     {result.face_distance if result.face_distance is not None else '-'}", 6)
+    put(f"FPS: {fps:5.1f}", 7, scale=0.5, color_text=(180, 220, 255))
 
     # Pastdagi issues paneli
     if result.issues:
@@ -207,6 +213,14 @@ def run_visual_loop(
         break_threshold_sec=float(config.get("sit_break_threshold_seconds", 60.0)),
         alert_threshold_sec=float(config.get("sit_alert_threshold_seconds", 25 * 60.0)),
         cooldown_sec=float(config.get("sit_alert_cooldown_seconds", 5 * 60.0)),
+    )
+
+    dimmer = ScreenDimmer(dim_level=float(config.get("dim_level", 0.4)))
+    dim_enabled = config.get("dim_on_bad_posture", True)
+    gaze_tracker = EyeGazeTracker(
+        gaze_alert_seconds=float(config.get("gaze_alert_seconds", 20 * 60.0)),
+        break_duration_seconds=float(config.get("gaze_break_seconds", 20.0)),
+        cooldown_sec=float(config.get("gaze_alert_cooldown_seconds", 60.0)),
     )
 
     fps_target = max(int(config.get("fps", 10)), 1)
@@ -288,17 +302,20 @@ def run_visual_loop(
 
                 person_present = not result.skipped and result.posture_score is not None
                 sit_tracker.observe(person_present=person_present)
+                facing = landmarks is not None and is_facing_camera(landmarks)
+                gaze_tracker.observe(facing_screen=facing)
                 result.sit_seconds = round(sit_tracker.continuous_sit_seconds, 1)
                 if result.posture_score is not None:
                     result.ergonomic_score = compute_ergonomic_score(
                         result.posture_score,
                         continuous_sit_seconds=result.sit_seconds,
                         face_distance=result.face_distance,
+                        continuous_gaze_seconds=gaze_tracker.continuous_gaze_seconds,
                     )
 
                 if landmarks is not None and controls.show_landmarks:
                     _draw_landmarks(cv2, frame, landmarks)
-                _draw_overlay(cv2, frame, result, fps_display, controls)
+                _draw_overlay(cv2, frame, result, fps_display, controls, gaze_seconds=gaze_tracker.continuous_gaze_seconds)
                 cv2.imshow(window_name, frame)
                 last_frame = frame
 
@@ -315,11 +332,25 @@ def run_visual_loop(
                     send_notification("PostureAI", issues=result.issues)
                     storage.log_alert(result.issues, timestamp=result.timestamp)
                     logger.info("Posture alert: %s", " | ".join(result.issues))
+                    if dim_enabled:
+                        dimmer.dim()
+
+                if not result.skipped and result.status == "good" and dimmer.is_dimmed:
+                    dimmer.restore()
 
                 if controls.notifications_enabled and sit_tracker.needs_break_alert():
                     send_notification("PostureAI", issues=["Tanaffus qiling!"])
                     storage.log_alert(["Tanaffus qiling!"])
                     logger.info("Break alert: 25+ daqiqa uzluksiz o'tirish")
+                    if dim_enabled:
+                        dimmer.dim()
+
+                if controls.notifications_enabled and gaze_tracker.needs_gaze_alert():
+                    send_notification("PostureAI", issues=["20-20-20!"])
+                    storage.log_alert(["20-20-20!"])
+                    logger.info("Gaze alert: 20+ daqiqa uzluksiz ekranga qarash")
+                    if dim_enabled:
+                        dimmer.dim()
 
                 now = time.monotonic()
                 if person_present and (last_logged_at == 0.0 or (now - last_logged_at) >= log_interval):
@@ -340,5 +371,6 @@ def run_visual_loop(
         except KeyboardInterrupt:
             logger.info("Visual rejim Ctrl+C bilan to'xtatildi.")
     finally:
+        dimmer.restore()
         detector.close()
         cv2.destroyAllWindows()

@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from dimmer import ScreenDimmer
 from notifier import send_notification
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ def _process_queues(
     session_id: int,
     config: dict[str, Any],
     state: RuntimeState,
+    dimmer: ScreenDimmer | None = None,
 ) -> bool:
     should_refresh_ui = False
     should_refresh_stats = False
@@ -47,6 +49,8 @@ def _process_queues(
             break
         send_notification("PostureAI", issues=getattr(alert, "issues", []))
         storage.log_alert(getattr(alert, "issues", []), timestamp=getattr(alert, "timestamp", None))
+        if dimmer and config.get("dim_on_bad_posture", True):
+            dimmer.dim()
         should_refresh_ui = True
         should_refresh_stats = True
 
@@ -63,6 +67,8 @@ def _process_queues(
         state.latest_score = int(getattr(latest_result, "posture_score", 0) or 0)
         state.latest_ergonomic = int(getattr(latest_result, "ergonomic_score", 0) or 0)
         state.latest_sit_minutes = float(getattr(latest_result, "sit_seconds", 0.0) or 0.0) / 60.0
+        if dimmer and state.latest_status == "good" and dimmer.is_dimmed:
+            dimmer.restore()
         now = time.monotonic()
         interval = float(config.get("stats_log_interval_seconds", 60))
         should_log = not getattr(latest_result, "skipped", False) and (
@@ -90,15 +96,18 @@ def run_console_app(
     config: dict[str, Any],
 ) -> None:
     state = RuntimeState()
+    dimmer = ScreenDimmer(dim_level=float(config.get("dim_level", 0.4)))
     logger.info("Monitoring ishga tushdi. To'xtatish uchun Ctrl+C bosing.")
 
     try:
         while not stop_event.is_set():
-            _process_queues(signal_queue, stats_queue, storage, session_id, config, state)
+            _process_queues(signal_queue, stats_queue, storage, session_id, config, state, dimmer)
             stop_event.wait(0.25)
     except KeyboardInterrupt:
         logger.info("Monitoring to'xtatilyapti.")
         stop_event.set()
+    finally:
+        dimmer.restore()
 
 
 def _create_icon(status: str) -> Any:
@@ -156,9 +165,11 @@ def _run_tray_app(
         ),
     )
 
+    dimmer = ScreenDimmer(dim_level=float(config.get("dim_level", 0.4)))
+
     def pump() -> None:
         while not stop_event.is_set():
-            updated = _process_queues(signal_queue, stats_queue, storage, session_id, config, state)
+            updated = _process_queues(signal_queue, stats_queue, storage, session_id, config, state, dimmer)
             if updated:
                 desired_icon = "good" if state.latest_status == "good" else "bad" if state.latest_status == "bad" else "off"
                 icon.icon = _create_icon(desired_icon)
@@ -172,7 +183,10 @@ def _run_tray_app(
 
     worker = threading.Thread(target=pump, daemon=True)
     worker.start()
-    icon.run()
+    try:
+        icon.run()
+    finally:
+        dimmer.restore()
     stop_event.set()
     worker.join(timeout=2)
 
