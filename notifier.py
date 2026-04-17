@@ -34,16 +34,24 @@ def send_notification(title: str, message: str = "", issues: Sequence[str] | Non
     os_name = platform.system()
 
     try:
-        if os_name == "Windows" and _plyer_available():
-            from plyer import notification
+        if os_name == "Windows":
+            if _plyer_available():
+                from plyer import notification
 
-            notification.notify(
-                title=title,
-                message=body,
-                app_name="PostureAI",
-                timeout=5,
-            )
-            return True
+                notification.notify(
+                    title=title,
+                    message=body,
+                    app_name="PostureAI",
+                    timeout=5,
+                )
+                return True
+
+            if importlib.util.find_spec("win10toast") is not None:
+                from win10toast import ToastNotifier
+
+                toaster = ToastNotifier()
+                toaster.show_toast(title, body, duration=5, threaded=True)
+                return True
 
         if os_name == "Darwin":
             safe_body = body.replace('"', '\\"')

@@ -12,6 +12,7 @@ Ishlash tartibi:
 
 from __future__ import annotations
 
+import ctypes
 import logging
 import platform
 import subprocess
@@ -21,6 +22,9 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _SYSTEM = platform.system()
+
+# Windows GDI32 gamma ramp strukturasi
+_GDI_RAMP_SIZE = 256
 
 
 def _macos_set_brightness(level: float) -> bool:
@@ -94,6 +98,53 @@ def _linux_restore() -> bool:
     return _linux_set_brightness(1.0)
 
 
+def _windows_set_brightness(level: float) -> bool:
+    """Windows: SetDeviceGammaRamp orqali ekranni xiraytiradi."""
+    try:
+        gdi32 = ctypes.windll.gdi32  # type: ignore[attr-defined]
+        user32 = ctypes.windll.user32  # type: ignore[attr-defined]
+        hdc = user32.GetDC(0)
+        if not hdc:
+            return False
+
+        ramp = (ctypes.c_ushort * _GDI_RAMP_SIZE * 3)()
+        for i in range(_GDI_RAMP_SIZE):
+            val = min(65535, int(i * 256 * level))
+            ramp[0][i] = val  # Red
+            ramp[1][i] = val  # Green
+            ramp[2][i] = val  # Blue
+
+        result = gdi32.SetDeviceGammaRamp(hdc, ctypes.byref(ramp))
+        user32.ReleaseDC(0, hdc)
+        return bool(result)
+    except Exception:
+        logger.debug("Windows SetDeviceGammaRamp ishlamadi")
+        return False
+
+
+def _windows_restore() -> bool:
+    """Windows: Gamma ramp'ni standart qiymatga tiklaydi."""
+    try:
+        gdi32 = ctypes.windll.gdi32  # type: ignore[attr-defined]
+        user32 = ctypes.windll.user32  # type: ignore[attr-defined]
+        hdc = user32.GetDC(0)
+        if not hdc:
+            return False
+
+        ramp = (ctypes.c_ushort * _GDI_RAMP_SIZE * 3)()
+        for i in range(_GDI_RAMP_SIZE):
+            val = i * 256
+            ramp[0][i] = val
+            ramp[1][i] = val
+            ramp[2][i] = val
+
+        result = gdi32.SetDeviceGammaRamp(hdc, ctypes.byref(ramp))
+        user32.ReleaseDC(0, hdc)
+        return bool(result)
+    except Exception:
+        return False
+
+
 @dataclass(slots=True)
 class ScreenDimmer:
     """Ekran xiraytirish boshqaruvchisi.
@@ -113,10 +164,12 @@ class ScreenDimmer:
         success = False
         if _SYSTEM == "Darwin":
             success = _macos_set_brightness(self.dim_level)
+        elif _SYSTEM == "Windows":
+            success = _windows_set_brightness(self.dim_level)
         elif _SYSTEM == "Linux":
             success = _linux_set_brightness(self.dim_level)
         else:
-            logger.info("Screen dim: %s platformasi uchun hozircha qo'llab-quvvatlanmaydi", _SYSTEM)
+            logger.info("Screen dim: %s platformasi uchun qo'llab-quvvatlanmaydi", _SYSTEM)
 
         if success:
             self.is_dimmed = True
@@ -130,6 +183,8 @@ class ScreenDimmer:
         success = False
         if _SYSTEM == "Darwin":
             success = _macos_restore()
+        elif _SYSTEM == "Windows":
+            success = _windows_restore()
         elif _SYSTEM == "Linux":
             success = _linux_restore()
 
