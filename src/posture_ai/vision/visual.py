@@ -16,16 +16,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from detector import REQUIRED_LANDMARKS, PoseDetector, PostureResult, analyze_posture
-from dimmer import ScreenDimmer
-from ergonomics import (
+from posture_ai.vision.detector import REQUIRED_LANDMARKS, PoseDetector, PostureResult, analyze_posture
+from posture_ai.os_utils.dimmer import ScreenDimmer
+from posture_ai.core.ergonomics import (
     EyeGazeTracker,
     SitDurationTracker,
     compute_ergonomic_score,
     is_facing_camera,
 )
-from filter import TemporalFilter
-from notifier import send_notification
+from posture_ai.core.filter import TemporalFilter
+from posture_ai.os_utils.notifier import send_notification
 
 logger = logging.getLogger(__name__)
 

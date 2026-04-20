@@ -177,6 +177,29 @@ class Storage:
             "alerts_count": int(alerts_row["alerts_count"] or 0),
         }
 
+    def get_today_frequent_issues(self) -> list[tuple[str, int]]:
+        """Bugungi eng ko'p uchraydigan muammolar (kamayish tartibida)."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT issues FROM alerts
+                WHERE DATE(timestamp) = DATE('now', 'localtime')
+                """
+            ).fetchall()
+
+        from collections import Counter
+        counter: Counter[str] = Counter()
+        for row in rows:
+            raw = row["issues"]
+            if raw:
+                try:
+                    items = json.loads(raw)
+                    for item in items:
+                        counter[item] += 1
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        return counter.most_common()
+
     def get_weekly_summary(self) -> list[dict[str, Any]]:
         with self._connect() as connection:
             rows = connection.execute(

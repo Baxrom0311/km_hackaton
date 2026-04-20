@@ -1,0 +1,137 @@
+ 
+ 
+“AI HEALTH” Hakaton-2026 respublika tanlovini o‘tkazish  
+tartibi to‘g‘risida  
+NIZOM 
+ 
+1-bob. Umumiy qoidalar 
+1.1. Mazkur Nizom “AI HEALTH” OTMlararo hakatonini (keyingi o‘rinlarda 
+— Hakaton) tashkil etish va o‘tkazish tartibini belgilaydi. 
+1.2. Hakaton sun’iy intellekt texnologiyalari asosida sog‘liqni saqlash 
+sohasida innovatsion yechimlarni ishlab chiqish maqsadida o‘tkaziladi. 
+1.3. Hakaton ikki bosqichda tashkil etiladi: 
+I bosqich — OTM ichki saralash bosqichi; 
+II bosqich — Festival doirasidagi respublika final bosqichi. 
+1.4. Hakaton respublika hududidagi davlat va nodavlat oliy ta’lim 
+muassasalari talabalari o‘rtasida o‘tkaziladi. 
+1.5. Hakaton tashkiliy qo‘mita tomonidan muvofiqlashtiriladi. 
+ 
+2-bob. Hakatonning maqsad va vazifalari 
+2.1. Sog‘liqni saqlash sohasida sun’iy intellekt asosidagi innovatsion 
+ishlanmalarni qo‘llab-quvvatlash. 
+2.2. Talabalar o‘rtasida IT va tibbiyot integratsiyasini rivojlantirish. 
+2.3. Iqtidorli yoshlarni aniqlash va ularni startap faoliyatiga jalb etish. 
+2.4. Sog‘liqni saqlash tizimidagi dolzarb muammolarga texnologik yechimlar 
+ishlab chiqish. 
+ 
+3-bob. Ishtirokchilar 
+3.1. Hakatonda OTM talabalari jamoa shaklida ishtirok etadi. 
+3.2. Har bir jamoa 2 nafardan 5 nafargacha ishtirokchidan iborat bo‘ladi. 
+3.3. Har bir OTM ichki saralash natijalariga ko‘ra belgilangan miqdordagi 
+jamoalarni final bosqichiga tavsiya etadi. 
+3.4. Bir ishtirokchi faqat bitta jamoa tarkibida qatnashishi mumkin. 
+ 
+ 
+ 
+4-bob. Hakaton yo‘nalishlari 
+Hakaton quyidagi yo‘nalishlarda o‘tkaziladi: 
+➢ Tibbiy ma’lumotlarni sun’iy intellekt asosida tahlil qilish; 
+➢ Diagnostika uchun AI yechimlar; 
+➢ Telemeditsina va mobil sog‘liqni saqlash platformalari; 
+➢ Sog‘liqni monitoring qilish tizimlari; 
+➢ Profilaktika va kasalliklarni prognozlash tizimlari. 
+ 
+5-bob. Hakatonni o‘tkazish tartibi 
+5.1. I bosqich — OTM ichki saralash 
+5.1.1. Har bir OTM mustaqil ravishda ichki saralash bosqichini tashkil etadi. 
+5.1.2. Ishtirokchilar quyidagilarni taqdim etadi: 
+➢ loyiha g‘oyasi tavsifi; 
+➢ muammoning dolzarbligi; 
+➢ texnik yechim konsepsiyasi; 
+➢ minimal prototip yoki demo (mavjud bo‘lsa). 
+5.1.3. Eng yuqori ball to‘plagan jamoalar II bosqichga yo‘llanma oladi. 
+5.2. II bosqich — Festival final bosqichi 
+5.2.1. Final bosqich festival doirasida 24 –48 soatlik intensiv hakaton yoki 
+tayyor loyiha asosida pitch formatida o‘tkaziladi. 
+5.2.2. Jamoalar quyidagilarni taqdim etadi: 
+➢ ishlaydigan MVP yoki demo versiya; 
+➢ 5–7 daqiqalik pitch taqdimot; 
+➢ texnik tushuntirish (AI modeli, algoritm, arxitektura). 
+5.2.3. I va II bosqich uchun baholash mezonlari (100 ball): 
+T/r Baholash mezonlari Jami ball 
+1. Dolzarbligi va amalga oshirish imkoniyati 20 ball 
+Tibbiy yoki ijtimoiy  jihatdan amalga oshirish mumkinligi: Ilmiy tadqiqot ish, gʻoya yoki 
+loyihaning  tahliliy va statistik ma’lumotlari aniqligi mos kelishi kerak. 
+1. Xalqaro miqyosdagi global tibbiy va ijtimoiy muammolarni aniq talqini 15-20 ball 
+2. Amalga oshirish aniq, infratuzilma talablariga mos 8-14 ball 
+3. Ushbu yo‘nalishda tadqiqotlar mavjud, lekin qoʻshimcha resurslar kerak. 0-7 ball 
+2. Innovatsionlik va yangilik darajasi 25 ball 
+ 
+ 
+ Taqdimotning yangiligi: Ilmiy tadqiqot ish, gʻoya yoki loyihadagi ma’lumotlar amaliyot va 
+nazariya bilan solishtirilganda yangi va original boʻlishi kerak. 
+Tibbiy va ijtimoiy yangilikni joriy qilish imkoniyati: Ilmiy tadqiqot ish, gʻoya yoki loyiha 
+tegishli yo‘nalishda dolzarb masalalarga innovatsion yechim taklif etishi lozim. 
+1. Butunlay yangi va ilgʻor yechim 17-25 ball 
+2. Qisman yangi tibbiy yoki ijtimoiy elementlar mavjud 8-16 ball 
+3. Innovatsionlik kam yoki yoʻq 0-7 ball 
+3. MVP mavjudligi, shakillanganlik darajasi 25 ball 
+Sinovlardan oʻtish: Ilmiy tadqiqot ish, gʻoya yoki loyiha laboratoriya yoki ijtimoiy sinovlaridan 
+muvaffaqiyatli oʻtgan boʻlishi kerak. 
+Texnik koʻrsatkichlar: Ilmiy tadqiqot ish, gʻoya yoki loyiha ning texnik parametrlarini 
+tasdiqlovchi hujjatlar, hisob-kitoblar va sinov natijalari taqdim etiladi. 
+1. Sinovlar muvaffaqiyatli oʻtgan, tibbiy-ijtimoiy samaradorlik 
+tasdiqlanganligini tasdiqlovchi hujjatlar, rasmlar va videomateriallar 
+mavjudligi. 
+15-20 ball 
+2. Sinov natijalari qisman mavjud, qoʻshimcha tajribalar talab etiladi. 8-14 ball 
+3. Sinov natijalari yoki texnik koʻrsatkichlar taqdim etilmagan. 0-7 ball 
+4. Ilmiy asoslanganlik va ilmiy adabiyotlar bilan ishlash 10 ball 
+Ilmiy izlanishlarga asoslanishi: Ilmiy tadqiqot ish, gʻoya yoki loyiha nazariy va amaliy jihatdan 
+ilmiy dalillar bilan asoslangan boʻlishi kerak. 
+Ilmiy adabiyotlar bilan ishlanganlik aniqligi: Ilmiy tadqiqot ish, gʻoya yoki loyihada texnik 
+tavsiflar, ilmiy adabiyotdan olingan ma’lumotlar, statistikalar taqdim etilishi lozim. 
+1. Barcha tavsiflar toʻliq va ilmiy asoslangan.Ilmiy adabiyotlar bilan ishlagan 8-10 ball 
+2. Qisman asoslangan, lekin tibbiy-ijtimoiy tavsifda kamchiliklar mavjud. 5-7 ball 
+3. Ilmiy dalillar yoki ilmiy adabiyotlar bilan ishlash yetarli emas. 0-4 ball 
+5. Savol-javob 15 ball 
+Ilmiy va amaliy jihatdan ishtrirokchi Tanlov komissiyasi a’zolari savollariga javob berishi 
+kerak. 
+1. Ilmiy asoslangan to‘liq 11-15 ball 
+2. Ikkilanishlar mavjud, qisman to‘liq 6-10 ball 
+3. Javob yo‘q yoki ilmiy asoslarga to‘g ‘ri kelmagan javob 0-5 ball 
+6. Prezentatsiya sifati va loyiha taqdimoti  10 ball 
+Tushunarlilik va aniqlik: Ilmiy tadqiqot ish, g ʻoya loyiha aniq, tushunarli va mantiqan 
+asoslangan boʻlishi kerak.  Prezentatsiya shakli: Vizual taqdimot sifatli, informatsion 
+grafikalar, diagrammalar va chizmalar mavjud boʻlishi kerak. 
+1. Toʻliq, aniq va puxta tayyorlangan taqdimot 8-10 ball 
+2. Oʻrtacha taqdimot, asosiy fikrlar yoritilgan 4-7 ball 
+3. Yetarli darajada tayyorlanmagan yoki taqdimot yoʻq 0-3 ball 
+Yakuniy ball 100 ball 
+ 
+6-bob. Hakamlar hay’ati 
+6.1. Hakamlar hay’ati festival tashkiloy qo‘mitasi tomonidan tasdiqlangan IT 
+sohasi mutaxassislari, tibbiyot ekspertlari, startap va investitsiya vakillaridan 
+iborat bo‘ladi. 
+6.2. Hakamlar qarori yakuniy hisoblanadi va qayta ko‘rib chiqilmaydi, 
+apellyatsiya hollari bundan mustasno. 
+ 
+ 
+ 
+ 
+7-bob. G‘oliblarni aniqlash va taqdirlash 
+7.1. Eng yuqori ball to‘plagan jamoalar I, II va III o‘rinlarni egallaydi. 
+7.2. Qo‘shimcha nominatsiyalar ta’sis etilishi mumkin. 
+7.3. G‘oliblar diplom, sertifikat va belgilangan mukofotlar bilan taqdirlanadi. 
+ 
+8-bob. Moliyalashtirish 
+8.1. Hakaton festival byudjeti, homiylar va hamkor tashkilotlar mablag‘lari 
+hisobidan moliyalashtiriladi. 
+8.2. Mukofot jamg‘armasi alohida tasdiqlanadi. 
+ 
+9-bob. Yakuniy qoidalar 
+9.1. Plagiat aniqlangan taqdirda jamoa Hakatondan chetlashtiriladi. 
+9.2. Loyiha mualliflik huquqi jamoaga tegishli bo‘ladi. 
+9.3. Mazkur Nizomda nazarda tutilmagan masalalar tashkiliy qo‘mita 
+tomonidan hal etiladi. 
+9.4. Nizom tasdiqlangan kundan e’tiboran kuchga kiradi. 

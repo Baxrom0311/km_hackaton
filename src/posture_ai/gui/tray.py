@@ -8,8 +8,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from dimmer import ScreenDimmer
-from notifier import send_notification
+from posture_ai.os_utils.dimmer import ScreenDimmer
+from posture_ai.os_utils.notifier import send_notification
 
 logger = logging.getLogger(__name__)
 

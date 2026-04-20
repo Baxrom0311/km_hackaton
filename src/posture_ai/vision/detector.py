@@ -11,7 +11,7 @@ from pathlib import Path
 from queue import Queue
 from typing import Any, Protocol, Sequence
 
-from ergonomics import (
+from posture_ai.core.ergonomics import (
     EyeGazeTracker,
     SitDurationTracker,
     compute_ergonomic_score,
@@ -19,7 +19,7 @@ from ergonomics import (
     eye_strain_risk,
     is_facing_camera,
 )
-from filter import TemporalFilter
+from posture_ai.core.filter import TemporalFilter
 
 logger = logging.getLogger(__name__)
 
