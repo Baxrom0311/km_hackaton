@@ -353,7 +353,11 @@ class DashboardWindow(QMainWindow):
     def handle_alert(self, result):
         """Ogohlantirish kelganda."""
         logger.warning(f"Alert: {result.issues}")
-        message = ", ".join(result.issues)
+        message = (
+            result.fatigue_advice
+            if getattr(result, "fatigue_alert", False) and getattr(result, "fatigue_advice", None)
+            else ", ".join(result.issues)
+        )
 
         # Tray notification
         self.tray_icon.showMessage(

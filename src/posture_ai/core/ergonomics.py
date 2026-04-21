@@ -162,6 +162,94 @@ class EyeGazeTracker:
         return True
 
 
+def compute_fatigue_score(
+    *,
+    posture_score: float | None,
+    continuous_sit_seconds: float,
+    continuous_gaze_seconds: float,
+    face_distance: float | None,
+) -> int:
+    """Charchoq riskini 0..100 oraliqda baholaydi.
+
+    Bu emotsiyani yuzdan taxmin qilish emas. Kamera orqali ko'rinadigan
+    ergonomik signallar: uzluksiz o'tirish, ekranga tikilish, ekran masofasi
+    va postura yomonlashuvi asosida risk hisoblanadi.
+    """
+    sit_risk = sit_duration_risk(
+        continuous_sit_seconds,
+        comfort_max_seconds=25 * 60.0,
+        danger_min_seconds=90 * 60.0,
+    )
+    gaze_risk = sit_duration_risk(
+        continuous_gaze_seconds,
+        comfort_max_seconds=20 * 60.0,
+        danger_min_seconds=75 * 60.0,
+    )
+    eye_risk = eye_strain_risk(face_distance) if face_distance is not None else 0.0
+    posture_risk = 0.0
+    if posture_score is not None:
+        posture_risk = max(0.0, min(1.0, (75.0 - float(posture_score)) / 75.0))
+
+    score = (
+        (sit_risk * 35.0)
+        + (gaze_risk * 25.0)
+        + (posture_risk * 25.0)
+        + (eye_risk * 15.0)
+    )
+    return max(0, min(100, round(score)))
+
+
+def fatigue_level(score: int | float) -> str:
+    """Risk darajasini matnli kategoriya sifatida qaytaradi."""
+    value = float(score)
+    if value >= 65.0:
+        return "high"
+    if value >= 35.0:
+        return "moderate"
+    return "low"
+
+
+def fatigue_advice(
+    *,
+    fatigue_score: int,
+    continuous_sit_seconds: float,
+    continuous_gaze_seconds: float,
+    face_distance: float | None,
+) -> str:
+    """Charchoq riskiga qarab qisqa maslahat beradi."""
+    level = fatigue_level(fatigue_score)
+    if level == "high":
+        return "Charchoq belgilari ko'rinyapti. 2-5 daqiqa tanaffus qiling, turing va yelkangizni yozing."
+    if continuous_gaze_seconds >= 20 * 60:
+        return "Ko'z charchashi oshmoqda. 20 soniya uzoqqa qarang va ko'zlaringizni dam oldiring."
+    if continuous_sit_seconds >= 25 * 60:
+        return "Uzoq o'tirib qoldingiz. Qisqa tanaffus qilib, yengil cho'ziling."
+    if face_distance is not None and eye_strain_risk(face_distance) >= 0.75:
+        return "Ekranga yaqin o'tiryapsiz. Biroz uzoqlashing va ko'zingizni dam oldiring."
+    if level == "moderate":
+        return "Charchoq riski oshmoqda. 1-2 daqiqa tanaffus qilish foydali."
+    return "Charchoq riski past."
+
+
+@dataclass(slots=True)
+class FatigueAlertTracker:
+    """Charchoq alertlarini threshold va cooldown bilan cheklaydi."""
+
+    threshold: int = 65
+    cooldown_sec: float = 10 * 60.0
+    time_fn: Callable[[], float] = time.monotonic
+    last_alert_at: float = field(default=float("-inf"), init=False)
+
+    def needs_fatigue_alert(self, fatigue_score: int | float) -> bool:
+        if float(fatigue_score) < self.threshold:
+            return False
+        now = self.time_fn()
+        if (now - self.last_alert_at) < self.cooldown_sec:
+            return False
+        self.last_alert_at = now
+        return True
+
+
 def compute_ergonomic_score(
     posture_score: float,
     *,

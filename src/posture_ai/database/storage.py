@@ -38,6 +38,8 @@ class Storage:
             connection.execute("ALTER TABLE posture_logs ADD COLUMN sit_seconds REAL")
         if "face_distance" not in existing_columns:
             connection.execute("ALTER TABLE posture_logs ADD COLUMN face_distance REAL")
+        if "fatigue_score" not in existing_columns:
+            connection.execute("ALTER TABLE posture_logs ADD COLUMN fatigue_score REAL")
 
     def initialize(self) -> None:
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
@@ -61,7 +63,8 @@ class Storage:
                     posture_score REAL,
                     ergonomic_score REAL,
                     sit_seconds REAL,
-                    face_distance REAL
+                    face_distance REAL,
+                    fatigue_score REAL
                 );
 
                 CREATE TABLE IF NOT EXISTS alerts (
@@ -107,9 +110,10 @@ class Storage:
                     posture_score,
                     ergonomic_score,
                     sit_seconds,
-                    face_distance
+                    face_distance,
+                    fatigue_score
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     session_id,
@@ -122,6 +126,7 @@ class Storage:
                     getattr(result, "ergonomic_score", None),
                     getattr(result, "sit_seconds", None),
                     getattr(result, "face_distance", None),
+                    getattr(result, "fatigue_score", None),
                 ),
             )
 

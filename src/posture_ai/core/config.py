@@ -52,6 +52,8 @@ class AppConfig(BaseModel):
     sit_break_threshold_seconds: int = Field(default=60, ge=30, le=600)
     sit_alert_threshold_seconds: int = Field(default=1500, ge=300, le=7200)
     sit_alert_cooldown_seconds: int = Field(default=300, ge=60, le=1800)
+    fatigue_alert_threshold: int = Field(default=65, ge=20, le=95)
+    fatigue_alert_cooldown_seconds: int = Field(default=600, ge=60, le=3600)
 
 def get_app_data_dir() -> Path:
     app_data_dir = (

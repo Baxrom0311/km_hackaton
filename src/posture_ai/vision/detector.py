@@ -68,6 +68,10 @@ class PostureResult:
     face_distance: float | None = None
     sit_seconds: float = 0.0
     ergonomic_score: int | None = None
+    fatigue_score: int | None = None
+    fatigue_level: str | None = None
+    fatigue_advice: str | None = None
+    fatigue_alert: bool = False
     break_alert: bool = False
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat(timespec="seconds"))
     facing_camera: bool | None = None

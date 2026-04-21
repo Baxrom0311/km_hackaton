@@ -21,6 +21,7 @@ ISSUE_MESSAGES = {
     "Tanaffus qiling!": "Uzoq vaqt o'tirdingiz. 1-2 daqiqa turing va cho'zilib oling.",
     "Ekranga yaqin!": "Ekranga juda yaqin o'tiribsiz. Ko'zlaringizni dam oldiring.",
     "20-20-20!": "20 daqiqa uzluksiz ekranga qaradingiz. 20 soniya 6 metr uzoqqa qarang.",
+    "Charchoq belgilari: tanaffus qiling!": "Charchoq belgilari ko'rinyapti. 2-5 daqiqa tanaffus qiling, turing va yelkangizni yozing.",
 }
 
 

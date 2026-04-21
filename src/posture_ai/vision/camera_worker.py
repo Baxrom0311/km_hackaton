@@ -5,7 +5,15 @@ import cv2
 import numpy as np
 from posture_ai.vision.detector import PoseDetector, PostureResult
 from posture_ai.core.filter import TemporalFilter
-from posture_ai.core.ergonomics import SitDurationTracker, EyeGazeTracker, compute_ergonomic_score
+from posture_ai.core.ergonomics import (
+    FatigueAlertTracker,
+    SitDurationTracker,
+    EyeGazeTracker,
+    compute_ergonomic_score,
+    compute_fatigue_score,
+    fatigue_advice,
+    fatigue_level,
+)
 from posture_ai.core.config import AppConfig
 
 
@@ -54,6 +62,10 @@ class CameraWorker(QThread):
         self.gaze_tracker = EyeGazeTracker(
             gaze_alert_seconds=20 * 60, break_duration_seconds=20, cooldown_sec=60
         )
+        self.fatigue_tracker = FatigueAlertTracker(
+            threshold=config.fatigue_alert_threshold,
+            cooldown_sec=config.fatigue_alert_cooldown_seconds,
+        )
 
     def _handle_result(self, result: PostureResult) -> None:
         person_present = not result.skipped and result.posture_score is not None
@@ -69,6 +81,19 @@ class CameraWorker(QThread):
                 continuous_sit_seconds=result.sit_seconds,
                 face_distance=result.face_distance,
                 continuous_gaze_seconds=self.gaze_tracker.continuous_gaze_seconds,
+            )
+            result.fatigue_score = compute_fatigue_score(
+                posture_score=result.posture_score,
+                continuous_sit_seconds=result.sit_seconds,
+                face_distance=result.face_distance,
+                continuous_gaze_seconds=self.gaze_tracker.continuous_gaze_seconds,
+            )
+            result.fatigue_level = fatigue_level(result.fatigue_score)
+            result.fatigue_advice = fatigue_advice(
+                fatigue_score=result.fatigue_score,
+                continuous_sit_seconds=result.sit_seconds,
+                continuous_gaze_seconds=self.gaze_tracker.continuous_gaze_seconds,
+                face_distance=result.face_distance,
             )
 
         self._last_result = result
@@ -95,6 +120,20 @@ class CameraWorker(QThread):
                     issues=["20-20-20!"],
                     sit_seconds=result.sit_seconds,
                     ergonomic_score=result.ergonomic_score,
+                )
+            )
+
+        if result.fatigue_score is not None and self.fatigue_tracker.needs_fatigue_alert(result.fatigue_score):
+            self.alert_triggered.emit(
+                PostureResult(
+                    status="bad",
+                    issues=["Charchoq belgilari: tanaffus qiling!"],
+                    sit_seconds=result.sit_seconds,
+                    ergonomic_score=result.ergonomic_score,
+                    fatigue_score=result.fatigue_score,
+                    fatigue_level=result.fatigue_level,
+                    fatigue_advice=result.fatigue_advice,
+                    fatigue_alert=True,
                 )
             )
 

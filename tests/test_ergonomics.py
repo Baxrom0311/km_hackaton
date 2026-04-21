@@ -5,9 +5,13 @@ from dataclasses import dataclass
 
 from posture_ai.core.ergonomics import (
     EyeGazeTracker,
+    FatigueAlertTracker,
     SitDurationTracker,
     compute_ergonomic_score,
+    compute_fatigue_score,
     estimate_face_camera_distance,
+    fatigue_advice,
+    fatigue_level,
     eye_strain_risk,
     is_facing_camera,
     sit_duration_risk,
@@ -225,6 +229,51 @@ class ErgonomicScoreTests(unittest.TestCase):
             continuous_gaze_seconds=60 * 60,  # 1 soat uzluksiz tikilish
         )
         self.assertLess(score, 90)
+
+
+class FatigueTests(unittest.TestCase):
+    def test_fatigue_score_low_for_short_healthy_session(self) -> None:
+        score = compute_fatigue_score(
+            posture_score=95,
+            continuous_sit_seconds=5 * 60,
+            continuous_gaze_seconds=5 * 60,
+            face_distance=0.12,
+        )
+
+        self.assertLess(score, 20)
+        self.assertEqual(fatigue_level(score), "low")
+
+    def test_fatigue_score_high_for_long_poor_session(self) -> None:
+        score = compute_fatigue_score(
+            posture_score=45,
+            continuous_sit_seconds=90 * 60,
+            continuous_gaze_seconds=75 * 60,
+            face_distance=0.38,
+        )
+
+        self.assertGreaterEqual(score, 65)
+        self.assertEqual(fatigue_level(score), "high")
+
+    def test_fatigue_advice_recommends_break_when_high(self) -> None:
+        advice = fatigue_advice(
+            fatigue_score=70,
+            continuous_sit_seconds=60 * 60,
+            continuous_gaze_seconds=30 * 60,
+            face_distance=0.30,
+        )
+
+        self.assertIn("tanaffus", advice.lower())
+
+    def test_fatigue_alert_tracker_respects_cooldown(self) -> None:
+        clock = FakeClock()
+        tracker = FatigueAlertTracker(threshold=65, cooldown_sec=60, time_fn=clock)
+
+        self.assertFalse(tracker.needs_fatigue_alert(64))
+        self.assertTrue(tracker.needs_fatigue_alert(65))
+        self.assertFalse(tracker.needs_fatigue_alert(80))
+
+        clock.advance(61)
+        self.assertTrue(tracker.needs_fatigue_alert(80))
 
 
 if __name__ == "__main__":

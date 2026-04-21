@@ -28,6 +28,7 @@ ALERTS_DATA = {
     "Ekranga juda yaqinsiz!": ("too_close.mp3", "Ekranga juda yaqinsiz, biroz uzoqroq o'tiring!"),
     "Tanaffus qiling!": ("break.mp3", "Juda uzoq o'tirib qoldingiz, o'rningizdan turib biroz harakatlaning!"),
     "20-20-20!": ("rule20.mp3", "20-20-20 qoidasi! 20 metr uzoqlikka 20 soniya qarab ko'zlarni dam oldiring!"),
+    "Charchoq belgilari: tanaffus qiling!": ("fatigue.mp3", "Charchoq belgilari ko'rinyapti, 2-5 daqiqa tanaffus qiling, turing va yelkangizni yozing!"),
 }
 
 # ═══ Audio backend ═══

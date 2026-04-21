@@ -218,9 +218,11 @@ class DashboardPage(QWidget):
         self.card_xy = StatCard("XY burchak", "--°", "#7b61ff")
         self.card_xz = StatCard("XZ burchak", "--°", "#ff9f43")
         self.card_yz = StatCard("YZ burchak", "--°", "#00f5d4")
+        self.card_fatigue = StatCard("Charchoq", "--", "#00f5d4")
         metrics_row2.addWidget(self.card_xy)
         metrics_row2.addWidget(self.card_xz)
         metrics_row2.addWidget(self.card_yz)
+        metrics_row2.addWidget(self.card_fatigue)
 
         # ── Row 3: Bugungi statistika ──
         today_card = QFrame()
@@ -395,6 +397,21 @@ class DashboardPage(QWidget):
         else:
             self.card_sit.lbl_value.setStyleSheet("font-size: 28px; font-weight: bold; color: #00f5d4;")
         self.card_sit.set_value(f"{sit_min:.0f} daq")
+
+        fatigue_score = getattr(result, "fatigue_score", None)
+        fatigue_level = getattr(result, "fatigue_level", None)
+        if fatigue_score is None:
+            self.card_fatigue.set_value("--")
+            self.card_fatigue.lbl_value.setStyleSheet("font-size: 28px; font-weight: bold; color: #a0aabf;")
+        else:
+            if fatigue_level == "high":
+                label, color = "Yuqori", "#ff4d4f"
+            elif fatigue_level == "moderate":
+                label, color = "O'rta", "#ff9f43"
+            else:
+                label, color = "Past", "#00f5d4"
+            self.card_fatigue.set_value(f"{label} {fatigue_score}")
+            self.card_fatigue.lbl_value.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {color};")
 
     def update_frame(self, frame):
         if frame is None:
