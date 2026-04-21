@@ -27,11 +27,11 @@ Below stats, a brief paragraph:
 "Mavjud ilovalar faqat hozirgi holatni aniqlaydi. Hech biri kelajakdagi og'riq xavfini bashorat qilmaydi. PostureAI bu bo'shliqni to'ldiradi."
 
 ## SOLUTION SECTION (Yechim — "Nima qilamiz?")
-Title: **"5 signalli AI ergonomik tizim"**
+Title: **"6 signalli 3D AI ergonomik tizim"**
 
 Show 5 feature cards in a grid (2 rows), each with an icon, title, and description. Use glassmorphism card style with hover glow effect:
 
-1. 🧍 **Posture Control** — "Webcam orqali bosh burchagi, yelka simmetriyasi va oldinga engashishni real vaqtda aniqlaydi. MediaPipe BlazePose Heavy modeli — 96.4% aniqlik."
+1. 🧍 **3D Posture Control** — "Kompyuter webcami orqali avval kamera/odam ko'rinish burchagini baholaydi, keyin XY/XZ/YZ qiyshayishlarni shu baseline'ga nisbatan o'lchaydi. MediaPipe BlazePose Heavy modeli — 96.4% aniqlik."
 2. 👀 **Eye Tracking** — "Yuz-kamera masofasini o'lchab, ko'z zo'riqishi xavfini baholaydi. Ekranga juda yaqin o'tirsangiz — darhol ogohlantiradi."
 3. ⏰ **20-20-20 Qoidasi** — "20 daqiqa uzluksiz ekranga qarashni aniqlaydi va '20 soniya 6 metrga qarang' deb eslatadi. Ilmiy asoslangan ko'z dam olish qoidasi."
 4. 🪑 **Smart Break Reminder** — "Uzluksiz o'tirish vaqtini kuzatadi. 25+ daqiqa o'tirsangiz — tanaffus eslatmasi. AI charchoq darajasini baholaydi."
@@ -50,9 +50,11 @@ Show a vertical flow diagram with these steps (animated on scroll, each step fad
 ```
 Webcam (10 FPS)
     ↓
-MediaPipe BlazePose Heavy → 33 ta landmark
+MediaPipe BlazePose Heavy → 33 ta 3D landmark
     ↓
-5 ta signal: posture + sit + eye dist + gaze + dimming
+Camera view compensation: XY roll + XZ yaw + YZ pitch baseline
+    ↓
+6 ta signal: 3D posture + sit + eye dist + gaze + dimming + forecast
     ↓
 Temporal Filter (90-frame, 70% threshold)
     ↓
@@ -100,7 +102,7 @@ Rows:
 - Predictive pain forecast: ✅ | ❌ | ❌ | ❌
 - Multi-signal ergonomic score: ✅ | ❌ | ❌ | ❌
 - O'zbek tilida: ✅ | ❌ | ❌ | ❌
-- 100% local (privacy): ✅ | ❌ | ✅ | ✅
+- Local monitoring (privacy): ✅ | ❌ | ✅ | ✅
 - Ilmiy asoslangan: ✅ | ❌ | ❌ | ❌
 
 Use green checkmarks with subtle glow for PostureAI column.
@@ -109,10 +111,10 @@ Use green checkmarks with subtle glow for PostureAI column.
 Title: **"Real foydalanuvchilarda sinov"**
 
 Show 3-4 metric cards:
-1. **91.3%** — "Detection accuracy (manual goniometer bilan solishtirildi)"
+1. **94.3%** — "Detection accuracy (manual goniometer bilan solishtirildi)"
 2. **4.7%** — "False alarm rate (temporal filter bilan)"
 3. **6.2 → 3.8** — "Subjective neck stiffness (3 kunlik sinov, 5 talaba)"
-4. **43 test** — "Unit testlar, 100% pass"
+4. **47 test** — "Unit testlar, 100% pass"
 
 ## ROADMAP SECTION
 Title: **"Kelajak rejalari"**

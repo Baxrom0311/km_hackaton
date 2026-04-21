@@ -22,7 +22,6 @@ from posture_ai.core.ergonomics import (
     EyeGazeTracker,
     SitDurationTracker,
     compute_ergonomic_score,
-    is_facing_camera,
 )
 from posture_ai.core.filter import TemporalFilter
 from posture_ai.os_utils.notifier import send_notification
@@ -112,7 +111,7 @@ def _draw_overlay(cv2: Any, frame: Any, result: PostureResult, fps: float, contr
         return
 
     # Top-left info paneli
-    panel_height = 192
+    panel_height = 365
     overlay = frame.copy()
     cv2.rectangle(overlay, (0, 0), (360, panel_height), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
@@ -144,7 +143,15 @@ def _draw_overlay(cv2: Any, frame: Any, result: PostureResult, fps: float, contr
     put(f"Eye gaze:      {gaze_min:6.1f} min", 4, color_text=gaze_color)
     put(f"Head angle:    {result.head_angle if result.head_angle is not None else '-'} deg", 5)
     put(f"Face dist:     {result.face_distance if result.face_distance is not None else '-'}", 6)
-    put(f"FPS: {fps:5.1f}", 7, scale=0.5, color_text=(180, 220, 255))
+    facing_label = "-" if result.facing_camera is None else ("yes" if result.facing_camera else "no")
+    put(f"Facing cam:    {facing_label}", 7)
+    put(f"XY roll:       {result.roll_xy_deg if result.roll_xy_deg is not None else '-'} deg", 8)
+    put(f"XZ yaw:        {result.yaw_xz_deg if result.yaw_xz_deg is not None else '-'} deg", 9)
+    put(f"YZ pitch:      {result.pitch_yz_deg if result.pitch_yz_deg is not None else '-'} deg", 10)
+    put(f"Cam XY view:   {result.camera_roll_xy_deg if result.camera_roll_xy_deg is not None else '-'} deg", 11)
+    put(f"Cam XZ view:   {result.camera_yaw_xz_deg if result.camera_yaw_xz_deg is not None else '-'} deg", 12)
+    put(f"Cam YZ view:   {result.camera_pitch_yz_deg if result.camera_pitch_yz_deg is not None else '-'} deg", 13)
+    put(f"FPS: {fps:5.1f}", 14, scale=0.5, color_text=(180, 220, 255))
 
     # Pastdagi issues paneli
     if result.issues:
@@ -291,10 +298,16 @@ def run_visual_loop(
                         head_angle_threshold=float(config["head_angle_threshold"]),
                         shoulder_diff_threshold=float(config["shoulder_diff_threshold"]),
                         forward_lean_threshold=float(config["forward_lean_threshold"]),
+                        roll_xy_threshold_deg=float(config.get("roll_xy_threshold_deg", 12.0)),
+                        yaw_xz_threshold_deg=float(config.get("yaw_xz_threshold_deg", 18.0)),
+                        pitch_yz_threshold_deg=float(config.get("pitch_yz_threshold_deg", 18.0)),
                         min_visibility=float(config.get("min_visibility", 0.5)),
                         baseline_head_angle=config.get("baseline_head_angle"),
                         baseline_shoulder_diff=config.get("baseline_shoulder_diff"),
                         baseline_forward_lean=config.get("baseline_forward_lean"),
+                        baseline_roll_xy_deg=config.get("baseline_roll_xy_deg"),
+                        baseline_yaw_xz_deg=config.get("baseline_yaw_xz_deg"),
+                        baseline_pitch_yz_deg=config.get("baseline_pitch_yz_deg"),
                     )
                     if result.skipped and result.reason == "low_visibility":
                         vis = {idx: round(landmarks[idx].visibility, 2) for idx in REQUIRED_LANDMARKS}
@@ -302,8 +315,7 @@ def run_visual_loop(
 
                 person_present = not result.skipped and result.posture_score is not None
                 sit_tracker.observe(person_present=person_present)
-                facing = landmarks is not None and is_facing_camera(landmarks)
-                gaze_tracker.observe(facing_screen=facing)
+                gaze_tracker.observe(facing_screen=bool(result.facing_camera) if person_present else False)
                 result.sit_seconds = round(sit_tracker.continuous_sit_seconds, 1)
                 if result.posture_score is not None:
                     result.ergonomic_score = compute_ergonomic_score(

@@ -125,6 +125,77 @@ EXERCISES_DB: dict[str, list[Exercise]] = {
             benefit="Uzoq o'tirishdan qotib qolgan bel va son mushaklarini bo'shashtiradi.",
         ),
     ],
+    "lean_back": [
+        Exercise(
+            name="Tana oldinga cho'zilish",
+            target="Orqa va bel mushaklari",
+            description="O'tirib, qo'llaringizni oldinga cho'zing va sekin oldinga egilib "
+                        "15 soniya ushlab turing. 3 marta takrorlang.",
+            duration_sec=60,
+            difficulty="oson",
+            benefit="Orqa mushaklarni faollashtiradi, orqaga yotish odatini tuzatadi.",
+        ),
+        Exercise(
+            name="Plank mashqi (30 sek)",
+            target="Core mushaklar (qorin + orqa)",
+            description="Tirsakka suyanib plank holatida 30 soniya turing. "
+                        "Tanangiz to'g'ri chiziqda bo'lsin. 2 marta takrorlang.",
+            duration_sec=90,
+            difficulty="o'rta",
+            benefit="Core mushaklarni mustahkamlaydi, to'g'ri o'tirishni osonlashtiradi.",
+        ),
+    ],
+    "neck_rotation": [
+        Exercise(
+            name="Bo'yin aylantirish",
+            target="Bo'yin mushaklari (barcha yo'nalishlar)",
+            description="Boshingizni sekin soat yo'nalishida 5 marta, keyin teskari yo'nalishda "
+                        "5 marta aylantiring. Har bir aylanishda 3 soniya.",
+            duration_sec=30,
+            difficulty="oson",
+            benefit="Bo'yin mushaklaridagi qotishlikni yo'qotadi, burilish diapazonini yaxshilaydi.",
+        ),
+        Exercise(
+            name="Bo'yin chapga-o'ngga burish",
+            target="Sternocleidomastoid mushak",
+            description="Boshingizni sekin chapga burib 10 soniya ushlab turing, keyin "
+                        "o'ngga burib 10 soniya. Har tomoniga 3 marta.",
+            duration_sec=60,
+            difficulty="oson",
+            benefit="Bo'yin burilish odatini tuzatadi, mushak muvozanatini tiklaydi.",
+        ),
+    ],
+    "lateral_tilt": [
+        Exercise(
+            name="Bosh yon cho'zilish",
+            target="Scalene va trapetsiya mushaklari",
+            description="O'ng qo'lingiz bilan boshingizni sekin o'ng tomonga eging. "
+                        "15 soniya ushlab turing. Har tomoniga 3 marta.",
+            duration_sec=90,
+            difficulty="oson",
+            benefit="Bosh qiyshayish odatini tuzatadi, bo'yin yon mushaklarini cho'zadi.",
+        ),
+    ],
+    "slouch": [
+        Exercise(
+            name="Yelka tortish (Scapular Retraction)",
+            target="Romboid va o'rta trapetsiya mushaklari",
+            description="Yelkalaringizni orqaga tortib birlashtiring (kuraklar bir-biriga yaqinlashsin). "
+                        "10 soniya ushlab turing. 8 marta takrorlang.",
+            duration_sec=80,
+            difficulty="oson",
+            benefit="Yelkalar bukilishini tuzatadi, ko'krak mushaklarini ochadi.",
+        ),
+        Exercise(
+            name="Devor oldida turib yelka cho'zilish",
+            target="Ko'krak va yelka oldingi mushaklari",
+            description="Devorga orqangiz bilan turing. Qo'llaringizni yon tomonga 90° ochib "
+                        "devorga tegizing. 20 soniya ushlab turing. 3 marta.",
+            duration_sec=60,
+            difficulty="o'rta",
+            benefit="Rounded shoulders ni tuzatadi, to'g'ri holat uchun mushaklarni o'rgatadi.",
+        ),
+    ],
 }
 
 # Muammo kalitlari → mashq guruhi mapping
@@ -132,7 +203,13 @@ _ISSUE_TO_GROUP: dict[str, str] = {
     "Boshingizni ko'taring!": "head_tilt",
     "Yelkalaringizni tekislang!": "shoulder_diff",
     "Oldinga engashmang!": "forward_lean",
+    "Orqaga yotmang!": "lean_back",
+    "Bo'yningizni to'g'rilang!": "neck_rotation",
+    "Boshingiz qiyshaygan!": "lateral_tilt",
+    "Yelkalaringizni oching!": "slouch",
     "Ekranga yaqin!": "eye_strain",
+    "Ekrandan juda uzoqsiz!": "eye_strain",
+    "Ekranga juda yaqinsiz!": "eye_strain",
     "20-20-20!": "eye_strain",
     "Tanaffus qiling!": "sit_duration",
 }

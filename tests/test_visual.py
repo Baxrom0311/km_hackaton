@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from visual import VisualControls, handle_visual_key
+from posture_ai.vision.visual import VisualControls, handle_visual_key
 
 
 class VisualHotkeyTests(unittest.TestCase):
@@ -34,3 +34,4 @@ class VisualHotkeyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+    

@@ -12,19 +12,19 @@
 
 ## Loyiha Haqida
 
-PostureAI — webcam orqali foydalanuvchining o'tirish pozitsiyasini real vaqtda tahlil qiluvchi, **6 ta signal** asosida ergonomik xavfni baholovchi va **ensemble ML modeli** yordamida kelajakdagi mushak-skelet og'rig'ini bashorat qiluvchi profilaktik tizim.
+PostureAI — kompyuter webcami orqali foydalanuvchining o'tirish pozitsiyasini real vaqtda tahlil qiluvchi, **6 ta signal** va **kamera burchagiga kompensatsiya qilingan XY/XZ/YZ 3D burchaklar** asosida ergonomik xavfni baholovchi, **ensemble ML modeli** yordamida kelajakdagi mushak-skelet og'rig'ini bashorat qiluvchi profilaktik tizim.
 
 ### Asosiy Imkoniyatlar
 
 | # | Funksiya | Texnologiya |
 |---|---|---|
-| 1 | Real-time poza aniqlash (33 landmark) | MediaPipe BlazePose Heavy (96.4% aniqlik) |
-| 2 | Multi-signal ergonomik ball | Posture + Sit duration + Eye strain + Gaze tracking |
+| 1 | Real-time 3D poza aniqlash (33 landmark) | MediaPipe BlazePose Heavy + camera-angle compensation |
+| 2 | Multi-signal ergonomik ball | 3D posture + Sit duration + Eye strain + Gaze tracking |
 | 3 | Prediktiv 30 kunlik og'riq prognozi | Ensemble: Linear + Holt Exp.Smoothing + WMA |
 | 4 | Shaxsiy mashq tavsiyalari | Muammoga qarab ilmiy asoslangan cho'zilish mashqlari |
 | 5 | AI kalibrovka (shaxsiy profil) | 12 sek to'g'ri o'tirish → individual baseline |
 | 6 | Ekran xiraytirish (Nudge) | Gamma API — noto'g'ri posture'da ekran xiraylashadi |
-| 7 | O'zbek tilidagi ovozli ogohlantirish | gTTS + pygame (to'liq offlayn) |
+| 7 | Ovozli ogohlantirish | Keshlangan audio + OS TTS fallback |
 | 8 | Premium GUI Dashboard | PySide6 — Deep Navy glassmorphism |
 
 ### Texnik Stack
@@ -33,7 +33,7 @@ PostureAI — webcam orqali foydalanuvchining o'tirish pozitsiyasini real vaqtda
 - **GUI**: PySide6 (Qt for Python) — Premium Dark Theme
 - **Database**: SQLite — sessions, posture logs, alerts
 - **Config**: Pydantic v2 — tipli validatsiya
-- **Audio**: gTTS + pygame — O'zbek tilidagi TTS
+- **Audio**: gTTS cache + OS TTS fallback
 
 ---
 
@@ -43,12 +43,20 @@ PostureAI — webcam orqali foydalanuvchining o'tirish pozitsiyasini real vaqtda
 # 1. Kutubxonalarni o'rnatish
 pip install -r requirements.txt
 
-# 2. (Ixtiyoriy) Demo uchun 7 kunlik mock ma'lumot yaratish
+# 2. Tizim diagnostikasi
+python main.py --doctor
+
+# 3. (Ixtiyoriy) Demo uchun 7 kunlik mock ma'lumot yaratish
 python generate_mock_data.py
 
-# 3. To'laqonli grafik interfeysli oynani ochish
-python src/posture_ai/main.py
+# 4. To'laqonli grafik interfeysli oynani ochish
+python main.py
+
+# 5. Statistika va forecast hisobotini ko'rish
+python main.py --stats
 ```
+
+`config.json`, `posture.db` va audio cache fayllari `~/.config/PostureAI/` ichida saqlanadi. Windows'da ular `%APPDATA%/PostureAI/` ga yoziladi.
 
 ### Dasturni Qadoqlash (.exe / .app)
 ```bash

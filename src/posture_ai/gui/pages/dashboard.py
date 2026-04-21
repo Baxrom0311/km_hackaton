@@ -1,10 +1,12 @@
 import cv2
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFrame, QGridLayout, QProgressBar, QScrollArea
+    QFrame, QGridLayout, QProgressBar, QScrollArea,
+    QPushButton, QFileDialog, QMessageBox
 )
-from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QFont, QTextDocument
+from PySide6.QtCore import Qt, QTimer, QRectF
+import datetime
 
 from posture_ai.core.forecast import forecast_risk
 from posture_ai.core.exercises import recommend_exercises
@@ -76,6 +78,65 @@ class MiniBar(QFrame):
         self.lbl_pct.setText(f"{int(pct)}%")
 
 
+class CircularGauge(QWidget):
+    """Doiraviy Gauge (Speedometer) vidjeti."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumSize(220, 220)
+        self.value = 0
+        self.status_text = "Kuzatilmoqda..."
+
+    def set_value(self, val: int, status: str):
+        self.value = val
+        self.status_text = status
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        size = min(self.width(), self.height())
+        rect = QRectF(self.width() / 2 - size / 2 + 15, self.height() / 2 - size / 2 + 15, size - 30, size - 30)
+
+        # Background arc
+        pen_bg = QPen(QColor("#1a0533"), 14)
+        pen_bg.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen_bg)
+        start_angle = 225 * 16
+        span_angle = -270 * 16
+        painter.drawArc(rect, start_angle, span_angle)
+
+        # Rang tanlash
+        if self.value >= 80:
+            color = QColor("#00f5d4")  # Yashil (Good)
+        elif self.value >= 50:
+            color = QColor("#ff9f43")  # Sariq (Warning)
+        elif self.value > 0:
+            color = QColor("#ff4d4f")  # Qizil (Bad)
+        else:
+            color = QColor("#a0aabf")  # Kulrang (0 yoki unknown)
+
+        # Progress arc
+        pen_fg = QPen(color, 14)
+        pen_fg.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen_fg)
+        val_span = int(-270 * 16 * (self.value / 100.0))
+        painter.drawArc(rect, start_angle, val_span)
+
+        # Markazdagi matn (Qiymat)
+        painter.setPen(color)
+        font_score = QFont("Arial", 48, QFont.Weight.Bold)
+        painter.setFont(font_score)
+        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, str(self.value) if self.value > 0 else "--")
+
+        # Pastki matn (Status)
+        painter.setPen(QColor("#a0aabf"))
+        font_status = QFont("Arial", 12)
+        painter.setFont(font_status)
+        text_rect = self.rect().adjusted(0, 80, 0, 0)
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, self.status_text)
+
+
 class DashboardPage(QWidget):
     def __init__(self, storage):
         super().__init__()
@@ -122,20 +183,14 @@ class DashboardPage(QWidget):
         score_inner.setContentsMargins(20, 16, 20, 16)
         score_inner.setSpacing(6)
 
-        lbl_score_title = QLabel("Ergonomic Score")
+        lbl_score_title = QLabel("Umumiy Ergonomik Ball")
         lbl_score_title.setProperty("class", "SubtitleText")
+        lbl_score_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.lbl_score = QLabel("--")
-        self.lbl_score.setStyleSheet("font-size: 48px; font-weight: bold; color: #00f5d4;")
-        self.lbl_score.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self.lbl_status = QLabel("Status: N/A")
-        self.lbl_status.setProperty("class", "SubtitleText")
-        self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.gauge = CircularGauge()
 
         score_inner.addWidget(lbl_score_title)
-        score_inner.addWidget(self.lbl_score)
-        score_inner.addWidget(self.lbl_status)
+        score_inner.addWidget(self.gauge, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # ── Row 2: Real-time metric cards (4 ta) ──
         metrics_row = QHBoxLayout()
@@ -150,6 +205,17 @@ class DashboardPage(QWidget):
         metrics_row.addWidget(self.card_shoulder)
         metrics_row.addWidget(self.card_lean)
         metrics_row.addWidget(self.card_sit)
+
+        # ── Row 2b: Yangi metrik kartalar ──
+        metrics_row2 = QHBoxLayout()
+        metrics_row2.setSpacing(10)
+
+        self.card_xy = StatCard("XY burchak", "--°", "#7b61ff")
+        self.card_xz = StatCard("XZ burchak", "--°", "#ff9f43")
+        self.card_yz = StatCard("YZ burchak", "--°", "#00f5d4")
+        metrics_row2.addWidget(self.card_xy)
+        metrics_row2.addWidget(self.card_xz)
+        metrics_row2.addWidget(self.card_yz)
 
         # ── Row 3: Bugungi statistika ──
         today_card = QFrame()
@@ -178,8 +244,26 @@ class DashboardPage(QWidget):
         self.today_grid.addWidget(self.lbl_alerts, 1, 0)
         self.today_grid.addWidget(self.lbl_avg_ergo, 1, 1)
 
+        self.btn_export_pdf = QPushButton("📥 Hisobotni PDF ga saqlash")
+        self.btn_export_pdf.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(123, 97, 255, 0.2);
+                border: 1px solid rgba(123, 97, 255, 0.5);
+                border-radius: 6px;
+                color: #ffffff;
+                padding: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(123, 97, 255, 0.4);
+            }
+        """)
+        self.btn_export_pdf.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_export_pdf.clicked.connect(self.export_pdf)
+
         today_inner.addWidget(lbl_today)
         today_inner.addLayout(self.today_grid)
+        today_inner.addWidget(self.btn_export_pdf)
 
         # ── Row 4: Haftalik mini-grafik ──
         weekly_card = QFrame()
@@ -240,6 +324,7 @@ class DashboardPage(QWidget):
         # ── Assemble right column ──
         right_layout.addWidget(score_card)
         right_layout.addLayout(metrics_row)
+        right_layout.addLayout(metrics_row2)
         right_layout.addWidget(today_card)
         right_layout.addWidget(weekly_card)
         right_layout.addWidget(forecast_card)
@@ -258,24 +343,44 @@ class DashboardPage(QWidget):
     # ── Real-time updates from CameraWorker ──
 
     def update_metrics(self, result):
-        # Score
-        self.lbl_score.setText(str(result.ergonomic_score or "--"))
-
+        # Umumiy Ball (Gauge)
+        val = result.ergonomic_score or 0
         if result.status == "good":
-            self.lbl_score.setStyleSheet("font-size: 48px; font-weight: bold; color: #00f5d4;")
-            self.lbl_status.setText("Status: GOOD")
-            self.lbl_status.setProperty("class", "SuccessText")
+            status_text = "YAXSHI ✓"
+        elif result.skipped:
+            status_text = "Kuzatilmoqda..."
         else:
-            self.lbl_score.setStyleSheet("font-size: 48px; font-weight: bold; color: #ff4d4f;")
-            self.lbl_status.setText("Status: BAD")
-            self.lbl_status.setProperty("class", "WarningText")
-        self.lbl_status.style().unpolish(self.lbl_status)
-        self.lbl_status.style().polish(self.lbl_status)
+            issues_text = ", ".join(result.issues[:2]) if result.issues else "NOTO'G'RI"
+            status_text = f"⚠ {issues_text}"
+            
+        self.gauge.set_value(val, status_text)
 
-        # Metric cards
+        # Metric cards — asosiy
         self.card_head.set_value(f"{result.head_angle or '--'}°")
         self.card_shoulder.set_value(f"{result.shoulder_diff or '--'}")
         self.card_lean.set_value(f"{result.forward_lean or '--'}")
+
+        # Yangi metrik kartalar
+        xy_angle = getattr(result, 'roll_xy_deg', None)
+        self.card_xy.set_value(f"{xy_angle:+.1f}°" if xy_angle is not None else "--°")
+        if xy_angle is not None and abs(xy_angle) > 12.0:
+            self.card_xy.lbl_value.setStyleSheet("font-size: 28px; font-weight: bold; color: #ff4d4f;")
+        else:
+            self.card_xy.lbl_value.setStyleSheet("font-size: 28px; font-weight: bold; color: #7b61ff;")
+
+        xz_angle = getattr(result, 'yaw_xz_deg', None)
+        self.card_xz.set_value(f"{xz_angle:+.1f}°" if xz_angle is not None else "--°")
+        if xz_angle is not None and abs(xz_angle) > 18.0:
+            self.card_xz.lbl_value.setStyleSheet("font-size: 28px; font-weight: bold; color: #ff4d4f;")
+        else:
+            self.card_xz.lbl_value.setStyleSheet("font-size: 28px; font-weight: bold; color: #ff9f43;")
+
+        yz_angle = getattr(result, 'pitch_yz_deg', None)
+        self.card_yz.set_value(f"{yz_angle:+.1f}°" if yz_angle is not None else "--°")
+        if yz_angle is not None and abs(yz_angle) > 18.0:
+            self.card_yz.lbl_value.setStyleSheet("font-size: 28px; font-weight: bold; color: #ff4d4f;")
+        else:
+            self.card_yz.lbl_value.setStyleSheet("font-size: 28px; font-weight: bold; color: #00f5d4;")
 
         sit_min = result.sit_seconds / 60.0
         if sit_min >= 20:
@@ -294,8 +399,8 @@ class DashboardPage(QWidget):
             rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb_image.shape
 
-            # Markazdan crop — faqat yuz va yelkalar ko'rinadi
-            crop_ratio = 0.75
+            # Kamera tasvirini to'liqroq ko'rsatish (crop kamaytirildi)
+            crop_ratio = 0.92
             crop_h = int(h * crop_ratio)
             crop_w = int(w * crop_ratio)
             y_start = (h - crop_h) // 2
@@ -317,6 +422,73 @@ class DashboardPage(QWidget):
             pass
 
     # ── Periodic stats refresh ──
+
+    def export_pdf(self):
+        try:
+            from PySide6.QtPrintSupport import QPrinter
+        except ImportError:
+            QMessageBox.warning(self, "Xatolik", "PDF eksport qilish uchun QtPrintSupport moduli yetishmayapti.")
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(self, "PDF hisobotni saqlash", "PostureAI_Hisobot.pdf", "PDF Files (*.pdf)")
+        if not file_path:
+            return
+
+        import datetime
+        today = datetime.date.today().isoformat()
+        
+        # Dashboard label'laridan ma'lumotlarni o'qiymiz (chunki refresh_today_stats orqali yuklangan)
+        good_pct_str = self.lbl_good_pct.text()
+        bad_pct_str = self.lbl_bad_pct.text()
+        avg_ergo_str = self.lbl_avg_ergo.text()
+        alerts_str = self.lbl_alerts.text()
+
+        html = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; color: #333; }}
+                h1 {{ color: #2c3e50; text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; }}
+                h2 {{ color: #2980b9; margin-top: 20px; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+                th, td {{ border: 1px solid #bdc3c7; padding: 12px; text-align: left; }}
+                th {{ background-color: #ecf0f1; width: 40%; }}
+                .highlight {{ font-weight: bold; color: #e74c3c; }}
+                .good {{ color: #27ae60; font-weight: bold; }}
+            </style>
+        </head>
+        <body>
+            <h1>PostureAI Ergonomik Hisobot</h1>
+            <p style="text-align: right;">Sana: <b>{today}</b></p>
+            
+            <h2>Bugungi Statistika</h2>
+            <table>
+                <tr><th>O'rtacha Ball</th><td><b style="font-size: 18px;">{avg_ergo_str.replace("O'rtacha: ", "")} / 100</b></td></tr>
+                <tr><th>To'g'ri Holat</th><td class="good">{good_pct_str.replace("To'g'ri: ", "")}</td></tr>
+                <tr><th>Noto'g'ri Holat</th><td class="highlight">{bad_pct_str.replace("Noto'g'ri: ", "")}</td></tr>
+                <tr><th>Ogohlantirishlar soni</th><td>{alerts_str.replace("Ogohlantirishlar: ", "")} ta</td></tr>
+            </table>
+            
+            <h2>Haftalik Trend</h2>
+            <p>Ilova orqali haftalik grafiklarni kuzatishingiz mumkin.</p>
+            
+            <br><hr>
+            <p style="text-align: center; color: #7f8c8d; font-size: 12px;">PostureAI tomonidan avtomatik generatsiya qilindi.</p>
+        </body>
+        </html>
+        """
+
+        document = QTextDocument()
+        document.setHtml(html)
+
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+        printer.setOutputFileName(file_path)
+        printer.setPageMargins(15, 15, 15, 15, QPrinter.Unit.Millimeter)
+
+        document.print_(printer)
+
+        QMessageBox.information(self, "Muvaffaqiyatli", f"Hisobot PDF formatida saqlandi:\\n{file_path}")
 
     def refresh_today_stats(self):
         stats = self.storage.get_today_stats()

@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from detector import PostureResult
-from storage import Storage
+from posture_ai.vision.detector import PostureResult
+from posture_ai.database.storage import Storage
 
 
 class StorageTests(unittest.TestCase):

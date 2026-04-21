@@ -1,20 +1,27 @@
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
+import json
 
-from detector import PostureResult
-from main import DEFAULT_CONFIG, load_config, render_stats_report, save_config
-from storage import Storage
+from posture_ai.vision.detector import PostureResult
+from posture_ai.core.config import AppConfig, load_config, save_config
+from posture_ai.database.storage import Storage
+from posture_ai.main import render_stats_report
 
 
 class MainTests(unittest.TestCase):
     def test_load_config_uses_defaults_when_file_missing(self) -> None:
-        config = load_config("missing-config.json")
-        self.assertEqual(config["fps"], DEFAULT_CONFIG["fps"])
-        self.assertEqual(config["camera_index"], DEFAULT_CONFIG["camera_index"])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "missing-config.json"
+
+            config = load_config(str(config_path))
+            default_config = AppConfig()
+
+            self.assertEqual(config.fps, default_config.fps)
+            self.assertEqual(config.camera_index, default_config.camera_index)
+            self.assertTrue(config_path.exists())
 
     def test_load_config_overrides_defaults(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -26,52 +33,50 @@ class MainTests(unittest.TestCase):
 
             config = load_config(str(config_path))
 
-            self.assertEqual(config["fps"], 15)
-            self.assertEqual(config["camera_index"], 2)
-            self.assertEqual(config["language"], DEFAULT_CONFIG["language"])
+            self.assertEqual(config.fps, 15)
+            self.assertEqual(config.camera_index, 2)
+            self.assertEqual(config.language, AppConfig().language)
 
     def test_save_config_round_trips(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.json"
-            payload = dict(DEFAULT_CONFIG)
-            payload["fps"] = 22
-            payload["baseline_head_angle"] = 11.4
+            payload = AppConfig()
+            payload.fps = 22
+            payload.baseline_head_angle = 11.4
 
-            save_config(str(config_path), payload)
+            save_config(payload, str(config_path))
             loaded = load_config(str(config_path))
 
-            self.assertEqual(loaded["fps"], 22)
-            self.assertEqual(loaded["baseline_head_angle"], 11.4)
+            self.assertEqual(loaded.fps, 22)
+            self.assertEqual(loaded.baseline_head_angle, 11.4)
 
-    def test_render_stats_report_contains_summary(self) -> None:
+    def test_render_stats_report_includes_summary_counts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "posture.db"
             storage = Storage(str(db_path))
             storage.initialize()
+
             session_id = storage.start_session()
             storage.log_posture(
                 session_id,
                 PostureResult(
                     status="good",
-                    head_angle=5.0,
+                    head_angle=10.0,
                     shoulder_diff=0.01,
                     forward_lean=-0.05,
                     posture_score=90,
+                    ergonomic_score=88,
+                    sit_seconds=120.0,
+                    face_distance=0.12,
                 ),
             )
-            storage.log_alert(["Boshingizni ko'taring!"])
+            storage.log_alert(["Tanaffus qiling!"])
             storage.end_session(session_id)
 
-            config = dict(DEFAULT_CONFIG)
-            config["baseline_head_angle"] = 10.0
-            config["baseline_shoulder_diff"] = 0.01
-            config["baseline_forward_lean"] = -0.05
-
-            report = render_stats_report(config, str(db_path))
+            report = render_stats_report(AppConfig(), db_path=db_path)
 
             self.assertIn("PostureAI Stats", report)
-            self.assertIn("Today: good=100.0% bad=0.0% avg_score=90.0", report)
-            self.assertIn("Calibration: head=10.0, shoulder=0.01, lean=-0.05", report)
+            self.assertIn("Samples: 1 | Alerts: 1", report)
 
 
 if __name__ == "__main__":

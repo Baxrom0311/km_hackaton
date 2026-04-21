@@ -16,11 +16,14 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
-from storage import Storage  # noqa: E402
+from posture_ai.core.config import get_default_db_path  # noqa: E402
+from posture_ai.database.storage import Storage  # noqa: E402
 
-DB_PATH = ROOT / "posture.db"
+DB_PATH = get_default_db_path()
 
 
 def main() -> None:

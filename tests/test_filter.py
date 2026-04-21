@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from filter import TemporalFilter
+from posture_ai.core.filter import TemporalFilter
 
 
 class FakeClock:

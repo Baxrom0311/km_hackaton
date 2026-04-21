@@ -11,10 +11,19 @@ import random
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parent
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from posture_ai.core.config import get_default_db_path
 
 
-def generate_mock_data(db_path: str = "posture.db") -> None:
-    conn = sqlite3.connect(db_path)
+def generate_mock_data(db_path: str | None = None) -> None:
+    resolved_db_path = db_path or str(get_default_db_path())
+    conn = sqlite3.connect(resolved_db_path)
     cursor = conn.cursor()
 
     # Storage.initialize() dagi sxemaga mos jadvallar
@@ -140,7 +149,7 @@ def generate_mock_data(db_path: str = "posture.db") -> None:
     conn.close()
 
     print("7 kunlik demo ma'lumotlar muvaffaqiyatli yaratildi!")
-    print("Endi dasturni ishga tushiring: python src/posture_ai/main.py")
+    print("Endi dasturni ishga tushiring: python main.py")
     print("Dashboard'da haftalik trend va Predictive Forecast ko'rinadi.")
 
 

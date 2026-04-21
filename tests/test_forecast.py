@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from forecast import forecast_risk
+from posture_ai.core.forecast import forecast_risk
 
 
 def _week(scores: list[float]) -> list[dict]:

@@ -21,7 +21,7 @@ PostureAI — kompyuter webcami orqali foydalanuvchining o'tirish pozitsiyasini 
 | 5 | Shaxsiy mashq tavsiyalari | `core/exercises.py` | Page, IJSPT 2012 |
 | 6 | AI kalibrovka (shaxsiy profil) | `vision/detector.py` | Individual baseline |
 | 7 | Ekran xiraytirish (Nudge) | `os_utils/dimmer.py` | Thaler & Sunstein, 2008 |
-| 8 | O'zbek tilidagi ovozli ogohlantirish | `os_utils/audio_helper.py` | gTTS + pygame |
+| 8 | Ovozli ogohlantirish | `os_utils/audio_helper.py` | Keshlangan audio + OS TTS fallback |
 
 ---
 
@@ -47,12 +47,13 @@ PostureAI — kompyuter webcami orqali foydalanuvchining o'tirish pozitsiyasini 
 ┌─────────────────────────────────────────────────────────────────────┐
 │                  MULTI-SIGNAL ANALYSIS LAYER                        │
 │                                                                     │
-│   1. Head tilt angle    : ear→shoulder→vertical (threshold: 25°)   │
-│   2. Shoulder symmetry  : |left_y - right_y| (threshold: 0.07)     │
-│   3. Forward lean       : nose_z - shoulder_z (threshold: -0.2)    │
-│   4. Eye strain         : face-camera distance (sigmoid risk)      │
-│   5. Sit duration       : continuous sit tracking (25 min alert)   │
-│   6. Eye gaze tracking  : 20-20-20 rule (20 min continuous)       │
+│   1. Camera view        : XY roll + XZ yaw + YZ pitch baseline     │
+│   2. XY roll            : camera-compensated bosh qiyshayishi      │
+│   3. XZ yaw             : camera-compensated bo'yin burilishi      │
+│   4. YZ pitch           : oldinga/orqaga engashish                 │
+│   5. Eye strain         : face-camera distance (sigmoid risk)      │
+│   6. Sit duration       : continuous sit tracking (25 min alert)   │
+│   7. Eye gaze tracking  : 20-20-20 rule (20 min continuous)       │
 │                                                                     │
 │   → Posture Score (0-100) + Ergonomic Score (0-100)                │
 │   → Issues list: ["Boshingizni ko'taring!", ...]                   │
@@ -62,7 +63,7 @@ PostureAI — kompyuter webcami orqali foydalanuvchining o'tirish pozitsiyasini 
 ┌────────────────────┐   ┌────────────────────────────────────────────┐
 │  STATISTIKA        │   │  TEMPORAL FILTER + ALERT SYSTEM            │
 │                    │   │                                            │
-│  SQLite posture.db │   │  Sliding window: 90 frame, 70% threshold  │
+│  SQLite app-data DB│   │  Sliding window: 90 frame, 70% threshold  │
 │  ├── sessions      │   │  Cooldown: 60 sekund                      │
 │  ├── posture_logs  │   │  ↓                                        │
 │  └── alerts        │   │  ├── OS Notification (cross-platform)     │
@@ -124,7 +125,7 @@ src/posture_ai/
 └── os_utils/                  # OS-specific xizmatlar
     ├── notifier.py            # Cross-platform bildirishnoma (Win/Mac/Linux)
     ├── dimmer.py              # Ekran xiraytirish (gamma API)
-    └── audio_helper.py        # gTTS + pygame ovozli ogohlantirishlar
+    └── audio_helper.py        # Cache + OS TTS fallback ogohlantirishlar
 ```
 
 ---
@@ -139,7 +140,7 @@ src/posture_ai/
 | Database | SQLite3 | stdlib | Sessiyalar, loglar, alertlar |
 | Config | Pydantic v2 | 2.4+ | Tipli config validatsiya |
 | Logging | Loguru | 0.7+ | Rotatsiyali log fayllar |
-| Audio | gTTS + pygame | latest | O'zbek tilidagi TTS |
+| Audio | gTTS cache + OS TTS | latest | Lokal/cached ovozli alertlar |
 | Packaging | PyInstaller | latest | .exe / .app qadoqlash |
 
 ---
@@ -152,14 +153,15 @@ src/posture_ai/
 har 100ms (10 FPS):
   1. frame = camera.read()
   2. landmarks = MediaPipe.detect(frame)
-  3. metrics = measure_posture(landmarks)          → head, shoulder, lean
-  4. face_distance = estimate_distance(landmarks)   → ko'z masofasi
-  5. posture_score = calculate_score(metrics)        → 0-100 ball
-  6. ergonomic_score = compute_ergonomic(            → 0-100 ball
+  3. camera_view = estimate_view(landmarks)        → kamera/torso XY, XZ, YZ baseline
+  4. metrics = measure_posture(landmarks)          → compensated XY, XZ, YZ, shoulder, lean
+  5. face_distance = estimate_distance(landmarks)   → ko'z masofasi
+  6. posture_score = calculate_score(metrics)        → 0-100 ball
+  7. ergonomic_score = compute_ergonomic(            → 0-100 ball
        posture_score, sit_time, eye_distance, gaze_time)
-  7. temporal_filter.update(status == "bad")
+  8. temporal_filter.update(status == "bad")
      → if triggered: emit alert_signal → notification + audio + dimmer
-  8. emit metrics_signal → dashboard real-time yangilash
+  9. emit metrics_signal → dashboard real-time yangilash
 ```
 
 ### 5.2. Statistika Yozish (har 60 sekund)
@@ -237,7 +239,7 @@ Baseline: Cote et al. (2008) — ofis ishchilarida 54% surunkali bo'yin og'rig'i
    - head_threshold = max(baseline + 8°, 18°)
    - shoulder_threshold = max(baseline + 0.02, 0.03)
    - forward_threshold = min(baseline - 0.12, -0.08)
-6. Shaxsiy profil config.json ga saqlanadi
+6. Shaxsiy profil app-data ichidagi `config.json` ga saqlanadi
 ```
 
 ---

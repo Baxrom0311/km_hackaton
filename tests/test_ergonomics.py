@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import dataclass
 
-from ergonomics import (
+from posture_ai.core.ergonomics import (
     EyeGazeTracker,
     SitDurationTracker,
     compute_ergonomic_score,

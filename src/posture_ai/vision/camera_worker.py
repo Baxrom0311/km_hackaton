@@ -33,11 +33,13 @@ class CameraWorker(QThread):
     MOTION_THRESHOLD = 5.0       # pixel farq threshold
     NO_MOTION_SLEEP = 2.0        # harakat yo'q → 2 sek uxlash
     MOTION_CHECK_INTERVAL = 0.5  # motion tekshirish oralig'i
+    STATIC_RECHECK_INTERVAL = 1.5
 
     def __init__(self, config: AppConfig, parent=None):
         super().__init__(parent)
         self.config = config
         self._is_running = True
+        self._force_ai_sampling = False
         self.detector = PoseDetector(config.model_dump())
 
         self.temporal_filter = TemporalFilter(
@@ -54,9 +56,55 @@ class CameraWorker(QThread):
             gaze_alert_seconds=20 * 60, break_duration_seconds=20, cooldown_sec=60
         )
 
+    def _handle_result(self, result: PostureResult) -> None:
+        person_present = not result.skipped and result.posture_score is not None
+        facing_screen = bool(result.facing_camera) if person_present else False
+
+        self.sit_tracker.observe(person_present=person_present)
+        self.gaze_tracker.observe(facing_screen=facing_screen)
+
+        result.sit_seconds = round(self.sit_tracker.continuous_sit_seconds, 1)
+        if result.posture_score is not None:
+            result.ergonomic_score = compute_ergonomic_score(
+                result.posture_score,
+                continuous_sit_seconds=result.sit_seconds,
+                face_distance=result.face_distance,
+                continuous_gaze_seconds=self.gaze_tracker.continuous_gaze_seconds,
+            )
+
+        self._last_result = result
+        self.metrics_updated.emit(result)
+
+        if not result.skipped and self.temporal_filter.update(result.status == "bad"):
+            self.alert_triggered.emit(result)
+
+        if self.sit_tracker.needs_break_alert():
+            self.alert_triggered.emit(
+                PostureResult(
+                    status="bad",
+                    issues=["Tanaffus qiling!"],
+                    sit_seconds=result.sit_seconds,
+                    ergonomic_score=result.ergonomic_score,
+                    break_alert=True,
+                )
+            )
+
+        if self.gaze_tracker.needs_gaze_alert():
+            self.alert_triggered.emit(
+                PostureResult(
+                    status="bad",
+                    issues=["20-20-20!"],
+                    sit_seconds=result.sit_seconds,
+                    ergonomic_score=result.ergonomic_score,
+                )
+            )
+
     def stop(self):
         self._is_running = False
-        self.wait()
+
+    def set_force_ai_sampling(self, enabled: bool) -> None:
+        """Kalibrovka kabi holatlarda motion skip'ni vaqtincha o'chiradi."""
+        self._force_ai_sampling = enabled
 
     def _reconnect_camera(self) -> bool:
         logger.info("Kamera qayta ulanmoqda...")
@@ -115,7 +163,7 @@ class CameraWorker(QThread):
         last_reconnect = time.monotonic()
         frame_count = 0
         prev_gray = None
-        no_motion_count = 0
+        last_ai_at = float("-inf")
 
         while self._is_running:
             started_at = time.monotonic()
@@ -158,64 +206,27 @@ class CameraWorker(QThread):
             prev_gray = curr_gray
 
             has_motion = motion > self.MOTION_THRESHOLD
+            force_ai_sampling = self._force_ai_sampling
 
-            if not has_motion:
-                no_motion_count += 1
-                # Harakat yo'q — AI chaqirmaymiz, faqat UI yangilaymiz
-                if frame_count % 4 == 0:
-                    self.frame_processed.emit(frame)
-
-                # Uzoq vaqt harakat yo'q → odam ketgan
-                if no_motion_count > 30:  # ~6 sekund (5fps)
-                    self.sit_tracker.observe(person_present=False)
-                    self.gaze_tracker.observe(facing_screen=False)
+            if not has_motion and not force_ai_sampling:
+                if (started_at - last_ai_at) >= self.STATIC_RECHECK_INTERVAL:
+                    self._handle_result(self.detector.process_frame(frame))
+                    last_ai_at = started_at
 
                 # Harakat yo'q → uzoqroq uxlash (CPU tejash)
+                self.frame_processed.emit(frame)
                 time.sleep(max(frame_interval, self.MOTION_CHECK_INTERVAL))
                 continue
 
-            # ══════ HARAKAT BOR — AI ishlaydi ══════
-            no_motion_count = 0
+            # ══════ HARAKAT BOR YOKI KALIBROVKA — AI ishlaydi ══════
             run_ai = (frame_count % ai_skip == 0)
 
             if run_ai:
-                result = self.detector.process_frame(frame)
-                person_present = not result.skipped and result.posture_score is not None
+                self._handle_result(self.detector.process_frame(frame))
+                last_ai_at = started_at
 
-                self.sit_tracker.observe(person_present=person_present)
-                self.gaze_tracker.observe(facing_screen=person_present)
-
-                result.sit_seconds = round(self.sit_tracker.continuous_sit_seconds, 1)
-                if result.posture_score is not None:
-                    result.ergonomic_score = compute_ergonomic_score(
-                        result.posture_score,
-                        continuous_sit_seconds=result.sit_seconds,
-                        face_distance=result.face_distance,
-                        continuous_gaze_seconds=self.gaze_tracker.continuous_gaze_seconds,
-                    )
-
-                self._last_result = result
-                self.metrics_updated.emit(result)
-
-                # Alerts
-                if not result.skipped and self.temporal_filter.update(result.status == "bad"):
-                    self.alert_triggered.emit(result)
-
-                if self.sit_tracker.needs_break_alert():
-                    self.alert_triggered.emit(PostureResult(
-                        status="bad", issues=["Tanaffus qiling!"],
-                        sit_seconds=result.sit_seconds, ergonomic_score=result.ergonomic_score, break_alert=True
-                    ))
-
-                if self.gaze_tracker.needs_gaze_alert():
-                    self.alert_triggered.emit(PostureResult(
-                        status="bad", issues=["20-20-20!"],
-                        sit_seconds=result.sit_seconds, ergonomic_score=result.ergonomic_score
-                    ))
-
-            # Frame UI ga
-            if frame_count % 2 == 0:
-                self.frame_processed.emit(frame)
+            # Frame UI ga — hamma kadrni yuboramiz (smooth ko'rinishi uchun)
+            self.frame_processed.emit(frame)
 
             elapsed = time.monotonic() - started_at
             remaining = frame_interval - elapsed

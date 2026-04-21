@@ -16,7 +16,7 @@ class AppConfig(BaseModel):
     cooldown_seconds: int = Field(default=60, ge=5, le=600, description="Bildirishnomalar orasidagi vaqt")
 
     camera_index: int = Field(default=0, ge=0, le=10)
-    fps: int = Field(default=5, ge=1, le=30, description="5 FPS yetarli — posture sekin o'zgaradi")
+    fps: int = Field(default=30, ge=1, le=60, description="Kamera uchun FPS (30 standart, AI uchun ai_skip_frames ishlatiladi)")
     camera_width: int = Field(default=640, ge=320, le=1920, description="Kamera resolution kengligi")
     camera_height: int = Field(default=480, ge=240, le=1080, description="Kamera resolution balandligi")
     language: str = Field(default="uz")
@@ -26,7 +26,7 @@ class AppConfig(BaseModel):
     min_detection_confidence: float = Field(default=0.4, ge=0.1, le=1.0)
     min_pose_presence_confidence: float = Field(default=0.4, ge=0.1, le=1.0)
     min_tracking_confidence: float = Field(default=0.4, ge=0.1, le=1.0)
-    ai_skip_frames: int = Field(default=2, ge=1, le=10, description="Har N-chi kadrda AI ishlaydi (CPU tejash)")
+    ai_skip_frames: int = Field(default=6, ge=1, le=30, description="Har N-chi kadrda AI ishlaydi (CPU tejash)")
 
     stats_log_interval_seconds: int = Field(default=60, ge=10, le=600)
     calibration_seconds: int = Field(default=12, ge=5, le=60)
@@ -35,6 +35,13 @@ class AppConfig(BaseModel):
     baseline_head_angle: float | None = None
     baseline_shoulder_diff: float | None = None
     baseline_forward_lean: float | None = None
+    baseline_roll_xy_deg: float | None = None
+    baseline_yaw_xz_deg: float | None = None
+    baseline_pitch_yz_deg: float | None = None
+
+    roll_xy_threshold_deg: float = Field(default=12.0, ge=3.0, le=45.0)
+    yaw_xz_threshold_deg: float = Field(default=18.0, ge=3.0, le=60.0)
+    pitch_yz_threshold_deg: float = Field(default=18.0, ge=3.0, le=60.0)
 
     model_asset_path: str = "models/pose_landmarker_heavy.task"
 
@@ -44,11 +51,22 @@ class AppConfig(BaseModel):
     sit_alert_threshold_seconds: int = Field(default=1500, ge=300, le=7200)
     sit_alert_cooldown_seconds: int = Field(default=300, ge=60, le=1800)
 
+def get_app_data_dir() -> Path:
+    app_data_dir = (
+        Path(os.getenv("APPDATA", "~")).expanduser()
+        if os.name == "nt"
+        else Path.home() / ".config" / "PostureAI"
+    )
+    app_data_dir.mkdir(parents=True, exist_ok=True)
+    return app_data_dir
+
+
 def get_config_path() -> Path:
-    app_data_dir = Path(os.getenv("APPDATA", "~")).expanduser() if os.name == "nt" else Path.home() / ".config" / "PostureAI"
-    if not app_data_dir.exists():
-        app_data_dir.mkdir(parents=True, exist_ok=True)
-    return app_data_dir / "config.json"
+    return get_app_data_dir() / "config.json"
+
+
+def get_default_db_path() -> Path:
+    return get_app_data_dir() / "posture.db"
 
 def load_config(path: str | Path | None = None) -> AppConfig:
     conf_path = Path(path) if path else get_config_path()

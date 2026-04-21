@@ -13,7 +13,7 @@ QMainWindow {
 
 QWidget {
     color: #ffffff;
-    font-family: 'Inter', 'Segoe UI', 'Helvetica Neue', sans-serif;
+    font-family: 'SF Pro Display', 'Helvetica Neue', 'Segoe UI', sans-serif;
 }
 
 /* Sidebar styling */
@@ -122,6 +122,57 @@ QWidget {
 .SuccessText {
     color: #00f5d4;
     font-weight: bold;
+}
+
+/* Calibration page */
+#CalibrationTitle {
+    font-size: 30px;
+    font-weight: 800;
+    color: #ffffff;
+    margin-bottom: 4px;
+}
+
+QFrame#CalibrationCard {
+    background-color: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(0, 245, 212, 0.22);
+    border-radius: 22px;
+}
+
+QLabel#CalibrationDescription {
+    font-size: 18px;
+    color: #d8e2f3;
+    padding: 8px 12px;
+}
+
+QLabel#CalibrationTip {
+    font-size: 15px;
+    color: #8fd8cf;
+    background-color: rgba(0, 245, 212, 0.08);
+    border: 1px solid rgba(0, 245, 212, 0.16);
+    border-radius: 14px;
+    padding: 10px 14px;
+}
+
+QLabel#CalibrationStatus {
+    font-size: 17px;
+    color: #00f5d4;
+    padding: 10px 12px;
+}
+
+QLabel#CalibrationStatus[class="WarningText"] {
+    color: #ff4d4f;
+    font-weight: 800;
+}
+
+QLabel#CalibrationStatus[class="SuccessText"] {
+    color: #00f5d4;
+    font-weight: 800;
+}
+
+QPushButton#CalibrationButton {
+    border-radius: 24px;
+    font-size: 17px;
+    padding: 12px 28px;
 }
 
 QProgressBar {

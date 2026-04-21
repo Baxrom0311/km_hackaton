@@ -217,9 +217,9 @@ def forecast_risk(weekly_summary: list[dict]) -> RiskForecast | None:
     daily_scores: list[float] = []
     for row in weekly_summary:
         score = row.get("avg_ergonomic")
-        if not score:
-            score = row.get("avg_score") or 0.0
-        if score > 0:
+        if score is None:
+            score = row.get("avg_score")
+        if score is not None and score >= 0:
             daily_scores.append(float(score))
 
     if len(daily_scores) < 2:

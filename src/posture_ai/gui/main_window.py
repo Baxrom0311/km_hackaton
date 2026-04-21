@@ -41,6 +41,8 @@ class DashboardWindow(QMainWindow):
         self.session_id = storage.start_session()
         self._start_minimized = start_minimized
         self._monitoring_active = True
+        self._is_quitting = False
+        self._cleanup_done = False
 
         self.setWindowTitle("PostureAI - AI HEALTH")
         self.resize(1000, 700)
@@ -281,7 +283,7 @@ class DashboardWindow(QMainWindow):
     def pause_monitoring(self):
         """Kamera va monitoringni to'xtatish."""
         self._monitoring_active = False
-        self.worker.stop()
+        self._stop_worker()
         self.tray_icon.setIcon(get_tray_icon("off"))
         self.tray_icon.setToolTip("PostureAI — To'xtatilgan")
         logger.info("Monitoring to'xtatildi (foydalanuvchi so'rovi).")
@@ -289,8 +291,7 @@ class DashboardWindow(QMainWindow):
     def resume_monitoring(self):
         """Monitoringni qayta yoqish."""
         # Eski worker hali ishlayotgan bo'lsa — to'xtatish
-        if self.worker.isRunning():
-            self.worker.stop()
+        self._stop_worker()
 
         self._monitoring_active = True
         self.worker = CameraWorker(self.config)
@@ -378,6 +379,37 @@ class DashboardWindow(QMainWindow):
     # Window Events
     # ══════════════════════════════════════════════════════
 
+    def _stop_worker(self):
+        """CameraWorker'ni deterministik to'xtatish."""
+        if getattr(self, "worker", None) is None:
+            return
+        if self.worker.isRunning():
+            self.worker.stop()
+            if not self.worker.wait(5000):
+                logger.warning("Worker thread vaqtida to'xtamadi, terminate qilinmoqda.")
+                self.worker.terminate()
+                self.worker.wait(2000)
+
+    def _cleanup_before_quit(self):
+        """QApplication tugashidan oldin kamera, timer va OS resurslarini yopish."""
+        if self._cleanup_done:
+            return
+        self._cleanup_done = True
+        self._is_quitting = True
+        logger.info("Dastur yopilmoqda...")
+
+        if getattr(self, "log_timer", None) is not None:
+            self.log_timer.stop()
+        if getattr(self, "tray_refresh_timer", None) is not None:
+            self.tray_refresh_timer.stop()
+
+        self._stop_worker()
+        self.storage.end_session(self.session_id)
+        if self.dimmer.is_dimmed:
+            self.dimmer.restore()
+        if getattr(self, "tray_icon", None) is not None:
+            self.tray_icon.hide()
+
     def showEvent(self, event):
         """Oyna ochilganda forecast yangilash."""
         super().showEvent(event)
@@ -385,6 +417,9 @@ class DashboardWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Oyna yopilganda — tray'ga yashirish (to'xtamaslik)."""
+        if self._is_quitting:
+            event.accept()
+            return
         event.ignore()
         self.hide()
         if not self._start_minimized:
@@ -399,17 +434,5 @@ class DashboardWindow(QMainWindow):
 
     def close_app(self):
         """Dasturni to'liq yopish."""
-        logger.info("Dastur yopilmoqda...")
-        self.log_timer.stop()
-        self.tray_refresh_timer.stop()
-        if self.worker.isRunning():
-            self.worker.stop()
-            if not self.worker.wait(5000):  # 5 sekund kutish
-                logger.warning("Worker thread vaqtida to'xtamadi, terminate qilinmoqda.")
-                self.worker.terminate()
-                self.worker.wait(2000)
-        self.storage.end_session(self.session_id)
-        if self.dimmer.is_dimmed:
-            self.dimmer.restore()
-        self.tray_icon.hide()
+        self._cleanup_before_quit()
         QApplication.quit()

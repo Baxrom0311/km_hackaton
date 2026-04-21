@@ -13,7 +13,7 @@
 
 > **Hakaton Yo'nalishi:** Sog'liqni monitoring qilish va kasalliklarni prognozlash
 
-Jamoa: [Ism Familiya] · OTM: [Universitet] · 2026
+Jamoa: PostureAI Team · 2026
 
 > **Aytiladigan gap:** "Salomlashing, hurmatli hakamlar hay'ati. Bugun sizga PostureAI ni — uzoq vaqt kompyuter oldida o'tirgan inson uchun mushak-skelet kasalliklarini bashorat qiladigan va avvaldan oldini oladigan preventiv tizimni ko'rsatamiz."
 
@@ -42,10 +42,10 @@ Talabalar va IT mutaxassislari, shuningdek raqamli iqtisodiyot xodimlari kuniga 
 
 **3 qatlamli AI tizim (To'laqonli innovatsiya):**
 
-1. **Real-time detection** — webcam + MediaPipe BlazePose Heavy modeli.
-2. **Multi-signal ergonomic risk score** — faqat holat emas, uzluksiz o'tirish vaqti + ekran masofasi (ko'z zo'riqishi) + gaze tracking (20-20-20) ni integratsiya qilingan.
-4. **Shaxsiy mashq tavsiyalari** — aniqlangan muammolarga qarab ilmiy asoslangan cho'zilish mashqlari avtomatik tavsiya qilinadi (Page, IJSPT 2012).
+1. **Real-time 3D detection** — kompyuter webcami + MediaPipe BlazePose Heavy modeli, avval kamera/odam ko'rinish burchagi baholanadi, keyin XY/XZ/YZ qiyshayishlar shu baseline'ga nisbatan o'lchanadi.
+2. **Multi-signal ergonomic risk score** — faqat holat emas, uzluksiz o'tirish vaqti + ekran masofasi (ko'z zo'riqishi) + gaze tracking (20-20-20) integratsiya qilingan.
 3. **Predictive forecast (BOZORDA YO'Q YECHIM)** — 7-kunlik tarixdan foydalanib, 3 ta statistik model ensemble'i (Linear Regression + Holt Exponential Smoothing + Weighted Moving Average) orqali 30 kunlik og'riq ehtimolini bashorat qiladi va shaxsiy tavsiya beradi.
+4. **Shaxsiy mashq tavsiyalari** — aniqlangan muammolarga qarab ilmiy asoslangan cho'zilish mashqlari avtomatik tavsiya qilinadi (Page, IJSPT 2012).
 
 > **Aytiladigan gap:** "Mavjud ilovalar yoki datchiklar faqat hozirgi holatingizni aytadi ('qaddingni tut'). Bizning yechim umuman yangi: u sizning 7 kunlik odatingiz trendini uchta statistik model bilan tahlil qiladi va 'agar shunday davom etsang, 30 kundan keyin 47% ehtimollik bilan bo'yin osteoxondrozi xavfi bor' deb bashorat qiladi. Bu sigmoid-asosli ehtimollik modeli — biologik jarayonlarni modellashtirish uchun standart ilmiy yondashuv."
 
@@ -57,11 +57,11 @@ Talabalar va IT mutaxassislari, shuningdek raqamli iqtisodiyot xodimlari kuniga 
 ```
 Webcam (10 FPS)
     ↓
-MediaPipe BlazePose Heavy → 33 ta landmark (96.4% PCKh@0.5, [R1])
+MediaPipe BlazePose Heavy → 33 ta 3D landmark (96.4% PCKh@0.5, [R1])
     ↓
 Temporal filter (90-frame sliding window, 70% threshold → false-alarm 4.7%)
     ↓
-Multi-signal ergonomic score (posture + sit_duration + eye_strain + gaze)
+Camera-view compensation → Multi-signal ergonomic score (3D posture + sit_duration + eye_strain + gaze)
     ↓
 SQLite tarix → Ensemble Forecast (Linear + Holt Exp.Smoothing + WMA)
                 → Sigmoid-based Pain Probability
@@ -84,7 +84,7 @@ SQLite tarix → Ensemble Forecast (Linear + Holt Exp.Smoothing + WMA)
 3. **(15s)** Ataylab oldinga engashish → Score tushadi, ekran xiraylashadi, O'zbekcha ovozli ogohlantirish chiqadi
 4. **(15s)** Kalibrovka sahifasini ko'rsatish — shaxsiy profil yaratish jarayoni
 5. **(15s)** Predictive Forecast panelini ko'rsatish — 30 kunlik og'riq bashorati
-6. **(20s)** Tizim mutlaqo offlayn ishlaydi, shaxsiy ma'lumotlarni bulutga yubormaydi
+6. **(20s)** Tizim monitoringni lokal bajaradi, shaxsiy ma'lumotlarni bulutga yubormaydi
 
 ---
 
@@ -138,7 +138,7 @@ Hakamlar baholash mezonlari bilan to'g'ridan-to'g'ri moslik:
 ### Maxfiylik va xavfsizlik
 
 **S: Bu web-kamera ishlatar ekan, maxfiylik nima bo'ladi?**  
-> Hech qanday video yoki surat xotirada saqlanmaydi. Webcam kadrlari faqat RAMda tahlil qilinib, 33 ta raqamli landmark nuqtaga aylanadi — kadr darhol yo'qotiladi. Ma'lumotlar bazasiga faqat burchak raqamlari (float sonlar) yoziladi. Tizim to'liq offlayn ishlaydi — internet ulanishi talab qilinmaydi, shaxsiy ma'lumotlar hech qachon bulutga yubormiladi. Bu GDPR va shaxsiy ma'lumotlar to'g'risidagi O'zbekiston qonunchiligiga to'liq mos.
+> Hech qanday video yoki surat xotirada saqlanmaydi. Webcam kadrlari faqat RAMda tahlil qilinib, 33 ta 3D landmark va burchak ko'rsatkichlariga aylanadi — kadr darhol yo'qotiladi. Ma'lumotlar bazasiga faqat raqamli metrikalar yoziladi. Monitoring lokal bajariladi, shaxsiy ma'lumotlar hech qachon bulutga yuborilmaydi.
 
 ### Raqobatchilar
 
