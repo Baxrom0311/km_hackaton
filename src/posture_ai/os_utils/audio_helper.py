@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import subprocess
 import threading
@@ -46,22 +47,16 @@ def _detect_backend() -> str:
 
     # 2. macOS afplay
     if sys.platform == "darwin":
-        try:
-            subprocess.run(["which", "afplay"], capture_output=True, check=True)
+        if shutil.which("afplay"):
             logger.info("Audio backend: afplay (macOS)")
             return "afplay"
-        except Exception:
-            pass
 
     # 3. Linux aplay/paplay
     if sys.platform == "linux":
         for cmd in ("paplay", "aplay"):
-            try:
-                subprocess.run(["which", cmd], capture_output=True, check=True)
+            if shutil.which(cmd):
                 logger.info(f"Audio backend: {cmd} (Linux)")
                 return cmd
-            except Exception:
-                continue
 
     logger.warning("Audio backend topilmadi — ovozli ogohlantirishlar o'chirildi.")
     return "none"

@@ -1,6 +1,5 @@
 from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
-from pydantic.json import pydantic_encoder
 import json
 from loguru import logger
 import os
@@ -8,42 +7,42 @@ import os
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    head_angle_threshold: float = Field(default=25.0, description="Boshingizni oldinga egishning taqiqlangan darajasi (gradus)")
-    shoulder_diff_threshold: float = Field(default=0.07, description="Yelkalar orasidagi farqning ruxsat etilgan chegarasi (normallashgan)")
-    forward_lean_threshold: float = Field(default=-0.35, description="Oldinga engashish chegarasi")
-    
-    temporal_window_size: int = Field(default=90, description="Datchiklarning yodida saqlanadigan ramkalar soni")
-    temporal_threshold: float = Field(default=0.7, description="Signal yuborish uchun xato ramkalar foizi")
-    cooldown_seconds: int = Field(default=60, description="Bildirishnomalar orasidagi vaqt")
-    
-    camera_index: int = Field(default=0)
-    fps: int = Field(default=5, description="5 FPS yetarli — posture sekin o'zgaradi")
-    camera_width: int = Field(default=640, description="Kamera resolution kengligi")
-    camera_height: int = Field(default=480, description="Kamera resolution balandligi")
+    head_angle_threshold: float = Field(default=25.0, ge=5.0, le=60.0, description="Boshingizni oldinga egishning taqiqlangan darajasi (gradus)")
+    shoulder_diff_threshold: float = Field(default=0.07, ge=0.01, le=0.5, description="Yelkalar orasidagi farqning ruxsat etilgan chegarasi (normallashgan)")
+    forward_lean_threshold: float = Field(default=-0.35, ge=-1.0, le=0.0, description="Oldinga engashish chegarasi")
+
+    temporal_window_size: int = Field(default=90, ge=10, le=300, description="Datchiklarning yodida saqlanadigan ramkalar soni")
+    temporal_threshold: float = Field(default=0.7, ge=0.1, le=1.0, description="Signal yuborish uchun xato ramkalar foizi")
+    cooldown_seconds: int = Field(default=60, ge=5, le=600, description="Bildirishnomalar orasidagi vaqt")
+
+    camera_index: int = Field(default=0, ge=0, le=10)
+    fps: int = Field(default=5, ge=1, le=30, description="5 FPS yetarli — posture sekin o'zgaradi")
+    camera_width: int = Field(default=640, ge=320, le=1920, description="Kamera resolution kengligi")
+    camera_height: int = Field(default=480, ge=240, le=1080, description="Kamera resolution balandligi")
     language: str = Field(default="uz")
 
-    min_visibility: float = 0.3  # Yaqin/uzoqda ham ishlasin
-    model_complexity: int = 1    # 1=lite (tez), 2=heavy (aniq lekin sekin)
-    min_detection_confidence: float = 0.4
-    min_pose_presence_confidence: float = 0.4
-    min_tracking_confidence: float = 0.4
-    ai_skip_frames: int = Field(default=2, description="Har N-chi kadrda AI ishlaydi (CPU tejash)")
-    
-    stats_log_interval_seconds: int = 60
-    calibration_seconds: int = 12
-    calibration_min_samples: int = 25
-    
+    min_visibility: float = Field(default=0.3, ge=0.1, le=1.0)
+    model_complexity: int = Field(default=1, ge=0, le=2)
+    min_detection_confidence: float = Field(default=0.4, ge=0.1, le=1.0)
+    min_pose_presence_confidence: float = Field(default=0.4, ge=0.1, le=1.0)
+    min_tracking_confidence: float = Field(default=0.4, ge=0.1, le=1.0)
+    ai_skip_frames: int = Field(default=2, ge=1, le=10, description="Har N-chi kadrda AI ishlaydi (CPU tejash)")
+
+    stats_log_interval_seconds: int = Field(default=60, ge=10, le=600)
+    calibration_seconds: int = Field(default=12, ge=5, le=60)
+    calibration_min_samples: int = Field(default=25, ge=5, le=200)
+
     baseline_head_angle: float | None = None
     baseline_shoulder_diff: float | None = None
     baseline_forward_lean: float | None = None
-    
+
     model_asset_path: str = "models/pose_landmarker_heavy.task"
 
-    start_minimized: bool = False  # True → oyna ko'rsatilmaydi, faqat tray
+    start_minimized: bool = False
 
-    sit_break_threshold_seconds: int = 60
-    sit_alert_threshold_seconds: int = 1500
-    sit_alert_cooldown_seconds: int = 300
+    sit_break_threshold_seconds: int = Field(default=60, ge=30, le=600)
+    sit_alert_threshold_seconds: int = Field(default=1500, ge=300, le=7200)
+    sit_alert_cooldown_seconds: int = Field(default=300, ge=60, le=1800)
 
 def get_config_path() -> Path:
     app_data_dir = Path(os.getenv("APPDATA", "~")).expanduser() if os.name == "nt" else Path.home() / ".config" / "PostureAI"

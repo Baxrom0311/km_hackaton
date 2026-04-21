@@ -81,17 +81,39 @@ def _macos_restore() -> bool:
         return False
 
 
-def _linux_set_brightness(level: float) -> bool:
+def _linux_get_connected_outputs() -> list[str]:
+    """xrandr orqali ulangan monitorlar nomlarini olish."""
     try:
-        subprocess.run(
-            ["xrandr", "--output", "eDP-1", "--brightness", str(level)],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        result = subprocess.run(
+            ["xrandr", "--query"],
+            capture_output=True, text=True, check=True,
         )
-        return True
+        outputs = []
+        for line in result.stdout.splitlines():
+            if " connected" in line:
+                outputs.append(line.split()[0])
+        return outputs
     except Exception:
+        return []
+
+
+def _linux_set_brightness(level: float) -> bool:
+    outputs = _linux_get_connected_outputs()
+    if not outputs:
         return False
+    success = False
+    for output in outputs:
+        try:
+            subprocess.run(
+                ["xrandr", "--output", output, "--brightness", str(level)],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            success = True
+        except Exception:
+            logger.debug("xrandr brightness %s uchun ishlamadi: %s", output, level)
+    return success
 
 
 def _linux_restore() -> bool:

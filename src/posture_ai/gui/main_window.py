@@ -288,6 +288,10 @@ class DashboardWindow(QMainWindow):
 
     def resume_monitoring(self):
         """Monitoringni qayta yoqish."""
+        # Eski worker hali ishlayotgan bo'lsa — to'xtatish
+        if self.worker.isRunning():
+            self.worker.stop()
+
         self._monitoring_active = True
         self.worker = CameraWorker(self.config)
         self.worker.metrics_updated.connect(self.page_dashboard.update_metrics)
@@ -296,6 +300,8 @@ class DashboardWindow(QMainWindow):
         self.worker.metrics_updated.connect(self.on_metrics_updated)
         self.worker.camera_error.connect(self.on_camera_error)
         self.worker.start()
+        # Kalibrovka sahifasiga yangi worker'ni berish
+        self.page_calib.worker = self.worker
         self.tray_icon.setIcon(get_tray_icon("idle"))
         logger.info("Monitoring qayta yoqildi.")
 
@@ -396,8 +402,12 @@ class DashboardWindow(QMainWindow):
         logger.info("Dastur yopilmoqda...")
         self.log_timer.stop()
         self.tray_refresh_timer.stop()
-        if self._monitoring_active:
+        if self.worker.isRunning():
             self.worker.stop()
+            if not self.worker.wait(5000):  # 5 sekund kutish
+                logger.warning("Worker thread vaqtida to'xtamadi, terminate qilinmoqda.")
+                self.worker.terminate()
+                self.worker.wait(2000)
         self.storage.end_session(self.session_id)
         if self.dimmer.is_dimmed:
             self.dimmer.restore()

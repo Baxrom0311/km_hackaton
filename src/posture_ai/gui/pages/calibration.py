@@ -100,7 +100,7 @@ class CalibrationPage(QWidget):
         self.is_calibrating = False
         try:
             self.worker.metrics_updated.disconnect(self.collect_sample)
-        except:
+        except (RuntimeError, TypeError):
             pass
 
         if len(self.samples) < self.config.calibration_min_samples:
