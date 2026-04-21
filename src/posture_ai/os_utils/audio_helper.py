@@ -7,9 +7,18 @@ from loguru import logger
 import pygame
 
 # gTTS for downloading high quality TTS files
-from gTTS import gTTS
+from gtts import gTTS
 
-AUDIO_DIR = Path("assets/audio")
+# Audio fayllar config papkasida saqlanadi (CWD'ga bog'liq emas)
+def _get_audio_dir() -> Path:
+    import sys, os
+    if sys.platform == "win32":
+        base = Path(os.getenv("APPDATA", "~")).expanduser() / "PostureAI"
+    else:
+        base = Path.home() / ".config" / "PostureAI"
+    return base / "audio"
+
+AUDIO_DIR = _get_audio_dir()
 
 # These are the exact phrases from detector.py mapped to filenames
 ALERTS_DATA = {

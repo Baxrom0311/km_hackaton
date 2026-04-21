@@ -8,9 +8,10 @@ from posture_ai.core.config import AppConfig
 
 class CameraWorker(QThread):
     # Signals to communicate securely with the main GUI thread
-    frame_processed = Signal(object) # raw frame for display
-    metrics_updated = Signal(object) # PostureResult object
-    alert_triggered = Signal(object) # Specifically important alerts (PosturResult)
+    frame_processed = Signal(object)  # raw frame for display
+    metrics_updated = Signal(object)  # PostureResult object
+    alert_triggered = Signal(object)  # Specifically important alerts
+    camera_error = Signal(str)        # Camera xatosi xabari
 
     def __init__(self, config: AppConfig, parent=None):
         super().__init__(parent)
@@ -44,6 +45,7 @@ class CameraWorker(QThread):
             self.detector.open()
         except Exception as e:
             logger.exception("Camera could not start.")
+            self.camera_error.emit(str(e))
             return
 
         logger.info("CameraWorker bashlandi.")
@@ -54,6 +56,10 @@ class CameraWorker(QThread):
                 self.sit_tracker.observe(person_present=False)
                 time.sleep(frame_interval)
                 continue
+
+            # Mirror frame for natural user feedback
+            import cv2
+            frame = cv2.flip(frame, 1)
 
             # Process AI model
             result = self.detector.process_frame(frame)

@@ -35,7 +35,9 @@ class AppConfig(BaseModel):
     baseline_forward_lean: float | None = None
     
     model_asset_path: str = "models/pose_landmarker_heavy.task"
-    
+
+    start_minimized: bool = False  # True → oyna ko'rsatilmaydi, faqat tray
+
     sit_break_threshold_seconds: int = 60
     sit_alert_threshold_seconds: int = 1500
     sit_alert_cooldown_seconds: int = 300

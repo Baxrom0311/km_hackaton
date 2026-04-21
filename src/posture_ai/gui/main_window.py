@@ -59,10 +59,10 @@ class DashboardWindow(QMainWindow):
         self.worker.frame_processed.connect(self.page_dashboard.update_frame)
         self.worker.alert_triggered.connect(self.handle_alert)
         self.worker.metrics_updated.connect(self.on_metrics_updated)
+        self.worker.camera_error.connect(self.on_camera_error)
 
         # ── Dimmer ──
         self.dimmer = ScreenDimmer()
-        self.is_dimmed = False
 
         # ── Periodic DB log (har 60 sekund) ──
         self.log_timer = QTimer(self)
@@ -296,6 +296,7 @@ class DashboardWindow(QMainWindow):
         self.worker.frame_processed.connect(self.page_dashboard.update_frame)
         self.worker.alert_triggered.connect(self.handle_alert)
         self.worker.metrics_updated.connect(self.on_metrics_updated)
+        self.worker.camera_error.connect(self.on_camera_error)
         self.worker.start()
         self.tray_icon.setIcon(get_tray_icon("idle"))
         logger.info("Monitoring qayta yoqildi.")
@@ -304,14 +305,30 @@ class DashboardWindow(QMainWindow):
     # Real-time Updates
     # ══════════════════════════════════════════════════════
 
+    def on_camera_error(self, error_msg: str):
+        """Kamera xatosi — foydalanuvchiga xabar berish."""
+        logger.error(f"Kamera xatosi: {error_msg}")
+        self._monitoring_active = False
+        self.tray_icon.setIcon(get_tray_icon("off"))
+        self.tray_icon.setToolTip("PostureAI — Kamera topilmadi")
+        self.tray_icon.showMessage(
+            "PostureAI — Kamera xatosi",
+            "Kamerani ulang va monitoringni qayta yoqing.",
+            QSystemTrayIcon.MessageIcon.Critical,
+            5000,
+        )
+        self.page_dashboard.lbl_camera.setText(
+            "Kamera topilmadi.\nSozlamalardan kamera indeksini tekshiring\n"
+            "yoki kamerani ulang va monitoringni qayta yoqing."
+        )
+
     def on_metrics_updated(self, result):
         """CameraWorker har kadr natijasini yuboradi."""
         self.last_result = result
 
         # Dimmer boshqaruvi
-        if result.status == "good" and self.is_dimmed:
+        if result.status == "good" and self.dimmer.is_dimmed:
             self.dimmer.restore()
-            self.is_dimmed = False
 
         # Tray icon rangini yangilash
         if result.skipped:
@@ -343,9 +360,8 @@ class DashboardWindow(QMainWindow):
             play_alert_for_issue(result.issues[0])
 
         # Ekran xiraytirish
-        if not self.is_dimmed:
+        if not self.dimmer.is_dimmed:
             self.dimmer.dim()
-            self.is_dimmed = True
 
         # Alert'ni bazaga yozish
         self.storage.log_alert(result.issues, timestamp=result.timestamp)
@@ -385,7 +401,7 @@ class DashboardWindow(QMainWindow):
         if self._monitoring_active:
             self.worker.stop()
         self.storage.end_session(self.session_id)
-        if self.is_dimmed:
+        if self.dimmer.is_dimmed:
             self.dimmer.restore()
         self.tray_icon.hide()
         QApplication.quit()

@@ -1,0 +1,2 @@
+[console_scripts]
+posture-ai = posture_ai.main:main

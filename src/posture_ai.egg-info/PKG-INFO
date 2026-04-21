@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: posture-ai
+Version: 2.0.0
+Summary: AI-powered ergonomic posture monitoring system
+Requires-Python: >=3.10
+Requires-Dist: mediapipe>=0.10.0
+Requires-Dist: opencv-python>=4.8.0
+Requires-Dist: Pillow>=10.0.0
+Requires-Dist: plyer>=2.1.0
+Requires-Dist: PySide6>=6.6.0
+Requires-Dist: pydantic>=2.4.0
+Requires-Dist: loguru>=0.7.2
+Requires-Dist: gTTS>=2.4.0
+Requires-Dist: pygame>=2.5.2
