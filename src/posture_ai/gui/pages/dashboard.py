@@ -1,4 +1,6 @@
 import cv2
+import time
+import numpy as np
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QFrame, QGridLayout, QProgressBar, QScrollArea,
@@ -138,9 +140,12 @@ class CircularGauge(QWidget):
 
 
 class DashboardPage(QWidget):
-    def __init__(self, storage):
+    def __init__(self, storage, max_preview_fps: int = 15):
         super().__init__()
         self.storage = storage
+        self._last_frame_ui_at = 0.0
+        # Worker allaqachon preview FPS'ni throttle qiladi; bu faqat queued signal backlog'ini kesadi.
+        self._frame_ui_interval = 1.0 / (max(1, int(max_preview_fps)) * 1.15)
         self.init_ui()
 
         # Auto-refresh today stats every 30 seconds
@@ -394,8 +399,11 @@ class DashboardPage(QWidget):
     def update_frame(self, frame):
         if frame is None:
             return
+        now = time.monotonic()
+        if (now - self._last_frame_ui_at) < self._frame_ui_interval:
+            return
+        self._last_frame_ui_at = now
         try:
-            import numpy as np
             rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb_image.shape
 

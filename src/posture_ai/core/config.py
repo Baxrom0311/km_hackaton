@@ -17,8 +17,10 @@ class AppConfig(BaseModel):
 
     camera_index: int = Field(default=0, ge=0, le=10)
     fps: int = Field(default=30, ge=1, le=60, description="Kamera uchun FPS (30 standart, AI uchun ai_skip_frames ishlatiladi)")
+    preview_fps: int = Field(default=15, ge=1, le=30, description="Dashboard live preview FPS")
     camera_width: int = Field(default=640, ge=320, le=1920, description="Kamera resolution kengligi")
     camera_height: int = Field(default=480, ge=240, le=1080, description="Kamera resolution balandligi")
+    ai_frame_width: int = Field(default=480, ge=256, le=1280, description="AI inferensiya uchun frame kengligi")
     language: str = Field(default="uz")
 
     min_visibility: float = Field(default=0.3, ge=0.1, le=1.0)

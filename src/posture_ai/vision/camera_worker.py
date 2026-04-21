@@ -31,9 +31,8 @@ class CameraWorker(QThread):
 
     # Motion detection parametrlari
     MOTION_THRESHOLD = 5.0       # pixel farq threshold
-    NO_MOTION_SLEEP = 2.0        # harakat yo'q → 2 sek uxlash
-    MOTION_CHECK_INTERVAL = 0.5  # motion tekshirish oralig'i
     STATIC_RECHECK_INTERVAL = 1.5
+    SLOW_AI_LOG_INTERVAL = 5.0
 
     def __init__(self, config: AppConfig, parent=None):
         super().__init__(parent)
@@ -148,6 +147,9 @@ class CameraWorker(QThread):
         fps = max(self.config.fps, 1)
         frame_interval = 1.0 / fps
         ai_skip = max(1, getattr(self.config, "ai_skip_frames", 2))
+        ai_min_interval = max(ai_skip / fps, 0.25)
+        preview_fps = max(1, min(getattr(self.config, "preview_fps", 15), fps))
+        preview_interval = 1.0 / preview_fps
         self._last_result = None
 
         try:
@@ -157,13 +159,17 @@ class CameraWorker(QThread):
             self.camera_error.emit(str(e))
             return
 
-        logger.info(f"CameraWorker bashlandi (fps={fps}, ai_skip={ai_skip}, motion_detect=ON)")
+        logger.info(
+            "CameraWorker bashlandi "
+            f"(fps={fps}, preview_fps={preview_fps}, ai_interval={ai_min_interval:.2f}s, motion_detect=ON)"
+        )
 
         consecutive_fails = 0
         last_reconnect = time.monotonic()
-        frame_count = 0
         prev_gray = None
         last_ai_at = float("-inf")
+        last_preview_emit_at = float("-inf")
+        last_slow_ai_log_at = 0.0
 
         while self._is_running:
             started_at = time.monotonic()
@@ -195,8 +201,13 @@ class CameraWorker(QThread):
                 continue
 
             consecutive_fails = 0
-            frame_count += 1
             frame = cv2.flip(frame, 1)
+
+            # Live preview AI'dan oldin yuboriladi, shunda inferensiya sekinlashsa ham UI qotmaydi.
+            now = time.monotonic()
+            if (now - last_preview_emit_at) >= preview_interval:
+                self.frame_processed.emit(frame.copy())
+                last_preview_emit_at = now
 
             # ══════ MOTION DETECTION (arzon — CPU ~0.1%) ══════
             curr_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -210,23 +221,31 @@ class CameraWorker(QThread):
 
             if not has_motion and not force_ai_sampling:
                 if (started_at - last_ai_at) >= self.STATIC_RECHECK_INTERVAL:
+                    ai_started_at = time.monotonic()
                     self._handle_result(self.detector.process_frame(frame))
-                    last_ai_at = started_at
+                    last_ai_at = time.monotonic()
+                    ai_elapsed = last_ai_at - ai_started_at
+                    if ai_elapsed > ai_min_interval and (last_ai_at - last_slow_ai_log_at) >= self.SLOW_AI_LOG_INTERVAL:
+                        logger.debug(f"AI inferensiya sekin: {ai_elapsed:.2f}s")
+                        last_slow_ai_log_at = last_ai_at
 
-                # Harakat yo'q → uzoqroq uxlash (CPU tejash)
-                self.frame_processed.emit(frame)
-                time.sleep(max(frame_interval, self.MOTION_CHECK_INTERVAL))
+                elapsed = time.monotonic() - started_at
+                remaining = frame_interval - elapsed
+                if remaining > 0:
+                    time.sleep(remaining)
                 continue
 
             # ══════ HARAKAT BOR YOKI KALIBROVKA — AI ishlaydi ══════
-            run_ai = (frame_count % ai_skip == 0)
+            run_ai = (started_at - last_ai_at) >= ai_min_interval
 
             if run_ai:
+                ai_started_at = time.monotonic()
                 self._handle_result(self.detector.process_frame(frame))
-                last_ai_at = started_at
-
-            # Frame UI ga — hamma kadrni yuboramiz (smooth ko'rinishi uchun)
-            self.frame_processed.emit(frame)
+                last_ai_at = time.monotonic()
+                ai_elapsed = last_ai_at - ai_started_at
+                if ai_elapsed > ai_min_interval and (last_ai_at - last_slow_ai_log_at) >= self.SLOW_AI_LOG_INTERVAL:
+                    logger.debug(f"AI inferensiya sekin: {ai_elapsed:.2f}s")
+                    last_slow_ai_log_at = last_ai_at
 
             elapsed = time.monotonic() - started_at
             remaining = frame_interval - elapsed

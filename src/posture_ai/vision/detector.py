@@ -4,6 +4,7 @@ import importlib.util
 import logging
 import math
 import statistics
+import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -631,13 +632,22 @@ class PoseDetector:
         if self.capture is not None:
             return
 
-        self.capture = self.cv2.VideoCapture(int(self.config["camera_index"]))
+        camera_index = int(self.config["camera_index"])
+        if sys.platform == "darwin" and hasattr(self.cv2, "CAP_AVFOUNDATION"):
+            self.capture = self.cv2.VideoCapture(camera_index, self.cv2.CAP_AVFOUNDATION)
+            if not self.capture.isOpened():
+                self.capture.release()
+                self.capture = self.cv2.VideoCapture(camera_index)
+        else:
+            self.capture = self.cv2.VideoCapture(camera_index)
 
         # Past resolution — CPU yuklamasini 3-4x kamaytiradi
         cam_w = int(self.config.get("camera_width", 640))
         cam_h = int(self.config.get("camera_height", 480))
+        cam_fps = int(self.config.get("fps", 30))
         self.capture.set(self.cv2.CAP_PROP_FRAME_WIDTH, cam_w)
         self.capture.set(self.cv2.CAP_PROP_FRAME_HEIGHT, cam_h)
+        self.capture.set(self.cv2.CAP_PROP_FPS, cam_fps)
         if hasattr(self.cv2, "CAP_PROP_BUFFERSIZE"):
             self.capture.set(self.cv2.CAP_PROP_BUFFERSIZE, 1)
         if not self.capture.isOpened():
@@ -686,11 +696,21 @@ class PoseDetector:
             raise RuntimeError("Camera is not open")
         return self.capture.read()
 
+    def _prepare_frame_for_ai(self, frame: Any) -> Any:
+        """AI inferensiya yukini kamaytirish uchun frame'ni kichraytiradi."""
+        target_width = int(self.config.get("ai_frame_width", 480))
+        height, width = frame.shape[:2]
+        if width <= target_width:
+            return frame
+        target_height = max(1, int(round(height * (target_width / width))))
+        return self.cv2.resize(frame, (target_width, target_height), interpolation=self.cv2.INTER_AREA)
+
     def extract_landmarks(self, frame: Any) -> Sequence[LandmarkLike] | None:
         if self.pose is None:
             raise RuntimeError("Pose model is not initialized")
 
-        rgb_frame = self.cv2.cvtColor(frame, self.cv2.COLOR_BGR2RGB)
+        ai_frame = self._prepare_frame_for_ai(frame)
+        rgb_frame = self.cv2.cvtColor(ai_frame, self.cv2.COLOR_BGR2RGB)
         if self.backend == "tasks":
             mp_image = self.mp.Image(image_format=self.mp.ImageFormat.SRGB, data=rgb_frame)
             timestamp_ms = time.monotonic_ns() // 1_000_000

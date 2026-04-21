@@ -45,6 +45,11 @@ class SettingsPage(QWidget):
         self.spin_fps.setValue(self.config.fps)
         self.spin_fps.setStyleSheet(spin_style)
 
+        self.spin_preview_fps = QSpinBox()
+        self.spin_preview_fps.setRange(1, 30)
+        self.spin_preview_fps.setValue(getattr(self.config, "preview_fps", 15))
+        self.spin_preview_fps.setStyleSheet(spin_style)
+
         self.spin_window = QSpinBox()
         self.spin_window.setRange(10, 300)
         self.spin_window.setValue(self.config.temporal_window_size)
@@ -67,6 +72,13 @@ class SettingsPage(QWidget):
         self.spin_ai_skip.setValue(self.config.ai_skip_frames)
         self.spin_ai_skip.setStyleSheet(spin_style)
 
+        self.spin_ai_frame_width = QSpinBox()
+        self.spin_ai_frame_width.setRange(256, 1280)
+        self.spin_ai_frame_width.setSingleStep(32)
+        self.spin_ai_frame_width.setValue(getattr(self.config, "ai_frame_width", 480))
+        self.spin_ai_frame_width.setSuffix(" px")
+        self.spin_ai_frame_width.setStyleSheet(spin_style)
+
         self.chk_autostart = QCheckBox("Kompyuter yoqilganda avtomatik ishga tushsin")
         self.chk_autostart.setChecked(is_autostart_enabled())
         self.chk_autostart.setStyleSheet("color: white; padding: 5px;")
@@ -77,6 +89,8 @@ class SettingsPage(QWidget):
 
         form_layout.addRow(self.create_label("Kamera indeksi:"), self.spin_camera)
         form_layout.addRow(self.create_label("FPS (kadr/sek):"), self.spin_fps)
+        form_layout.addRow(self.create_label("Preview FPS:"), self.spin_preview_fps)
+        form_layout.addRow(self.create_label("AI frame width:"), self.spin_ai_frame_width)
         form_layout.addRow(self.create_label("Temporal window:"), self.spin_window)
         form_layout.addRow(self.create_label("Alert orasidagi vaqt:"), self.spin_cooldown)
         form_layout.addRow(self.create_label("Tanaffus eslatmasi:"), self.spin_break)
@@ -113,6 +127,8 @@ class SettingsPage(QWidget):
     def save_settings(self):
         self.config.camera_index = self.spin_camera.value()
         self.config.fps = self.spin_fps.value()
+        self.config.preview_fps = self.spin_preview_fps.value()
+        self.config.ai_frame_width = self.spin_ai_frame_width.value()
         self.config.temporal_window_size = self.spin_window.value()
         self.config.cooldown_seconds = self.spin_cooldown.value()
         self.config.sit_alert_threshold_seconds = self.spin_break.value()
@@ -149,6 +165,8 @@ class SettingsPage(QWidget):
         defaults = AppConfig()
         self.spin_camera.setValue(defaults.camera_index)
         self.spin_fps.setValue(defaults.fps)
+        self.spin_preview_fps.setValue(defaults.preview_fps)
+        self.spin_ai_frame_width.setValue(defaults.ai_frame_width)
         self.spin_window.setValue(defaults.temporal_window_size)
         self.spin_cooldown.setValue(defaults.cooldown_seconds)
         self.spin_break.setValue(defaults.sit_alert_threshold_seconds)

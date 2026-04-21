@@ -129,7 +129,10 @@ class DashboardWindow(QMainWindow):
         # Stacked pages
         self.stacked_widget = QStackedWidget()
 
-        self.page_dashboard = DashboardPage(self.storage)
+        self.page_dashboard = DashboardPage(
+            self.storage,
+            max_preview_fps=getattr(self.config, "preview_fps", 15),
+        )
         self.page_calib = CalibrationPage(self.config, self.worker)
         self.page_set = SettingsPage(self.config)
 
