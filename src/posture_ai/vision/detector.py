@@ -123,9 +123,9 @@ def get_forward_lean(landmarks: Sequence[LandmarkLike]) -> float:
 
 def check_camera_distance(landmarks: Sequence[LandmarkLike]) -> str:
     distance = abs(landmarks[11].x - landmarks[12].x)
-    if distance < 0.15:
+    if distance < 0.08:    # juda uzoq — yelkalar ko'rinmaydi
         return "too_far"
-    if distance > 0.50:
+    if distance > 0.70:    # juda yaqin — faqat yuz ko'rinadi
         return "too_close"
     return "ok"
 
@@ -236,12 +236,24 @@ def analyze_posture(
             camera_distance=metrics.camera_distance,
         )
 
+    # Kalibrovka bo'lsa, thresholdlarni baseline'ga nisbatan moslashtirish
+    effective_head_threshold = head_angle_threshold
+    effective_shoulder_threshold = shoulder_diff_threshold
+    effective_forward_threshold = forward_lean_threshold
+
+    if baseline_head_angle is not None:
+        effective_head_threshold = max(baseline_head_angle + 8.0, 18.0)
+    if baseline_shoulder_diff is not None:
+        effective_shoulder_threshold = max(baseline_shoulder_diff + 0.02, 0.03)
+    if baseline_forward_lean is not None:
+        effective_forward_threshold = min(baseline_forward_lean - 0.12, -0.08)
+
     issues: list[str] = []
-    if metrics.head_angle > head_angle_threshold:
+    if metrics.head_angle > effective_head_threshold:
         issues.append("Boshingizni ko'taring!")
-    if metrics.shoulder_diff > shoulder_diff_threshold:
+    if metrics.shoulder_diff > effective_shoulder_threshold:
         issues.append("Yelkalaringizni tekislang!")
-    if metrics.forward_lean < forward_lean_threshold:
+    if metrics.forward_lean < effective_forward_threshold:
         issues.append("Oldinga engashmang!")
 
     face_distance = estimate_face_camera_distance(landmarks)
@@ -292,6 +304,12 @@ class PoseDetector:
             return
 
         self.capture = self.cv2.VideoCapture(int(self.config["camera_index"]))
+
+        # Past resolution — CPU yuklamasini 3-4x kamaytiradi
+        cam_w = int(self.config.get("camera_width", 640))
+        cam_h = int(self.config.get("camera_height", 480))
+        self.capture.set(self.cv2.CAP_PROP_FRAME_WIDTH, cam_w)
+        self.capture.set(self.cv2.CAP_PROP_FRAME_HEIGHT, cam_h)
         if hasattr(self.cv2, "CAP_PROP_BUFFERSIZE"):
             self.capture.set(self.cv2.CAP_PROP_BUFFERSIZE, 1)
         if not self.capture.isOpened():

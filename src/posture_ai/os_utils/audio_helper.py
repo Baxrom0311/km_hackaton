@@ -1,17 +1,14 @@
 import os
+import sys
+import subprocess
 import threading
 from pathlib import Path
 from loguru import logger
 
-# Pygame mixer for fast playback without blocking GUI
-import pygame
-
-# gTTS for downloading high quality TTS files
 from gtts import gTTS
 
 # Audio fayllar config papkasida saqlanadi (CWD'ga bog'liq emas)
 def _get_audio_dir() -> Path:
-    import sys, os
     if sys.platform == "win32":
         base = Path(os.getenv("APPDATA", "~")).expanduser() / "PostureAI"
     else:
@@ -30,54 +27,114 @@ ALERTS_DATA = {
     "20-20-20!": ("rule20.mp3", "20-20-20 qoidasi! 20 metr uzoqlikka 20 soniya qarab ko'zlarni dam oldiring!"),
 }
 
-_is_mixer_initialized = False
+# ═══ Audio backend ═══
+# pygame.mixer ba'zan Python 3.14+ da ishlamaydi, shuning uchun
+# macOS: afplay, Linux: aplay/paplay, Windows: pygame fallback
 
-def init_audio():
-    """Initializes pygame mixer safely if not already done."""
-    global _is_mixer_initialized
-    if not _is_mixer_initialized:
+_audio_backend = "none"
+
+def _detect_backend() -> str:
+    """Eng mos audio backend'ni aniqlash."""
+    # 1. pygame.mixer sinash
+    try:
+        import pygame
+        pygame.mixer.init()
+        logger.info("Audio backend: pygame.mixer")
+        return "pygame"
+    except Exception:
+        pass
+
+    # 2. macOS afplay
+    if sys.platform == "darwin":
         try:
-            pygame.mixer.init()
-            _is_mixer_initialized = True
-            logger.info("Audio tizimi (PyGame) ishga tushdi.")
-        except Exception as e:
-            logger.error(f"PyGame mixer xatoligi: {e}")
+            subprocess.run(["which", "afplay"], capture_output=True, check=True)
+            logger.info("Audio backend: afplay (macOS)")
+            return "afplay"
+        except Exception:
+            pass
+
+    # 3. Linux aplay/paplay
+    if sys.platform == "linux":
+        for cmd in ("paplay", "aplay"):
+            try:
+                subprocess.run(["which", cmd], capture_output=True, check=True)
+                logger.info(f"Audio backend: {cmd} (Linux)")
+                return cmd
+            except Exception:
+                continue
+
+    logger.warning("Audio backend topilmadi — ovozli ogohlantirishlar o'chirildi.")
+    return "none"
+
+_is_playing = False
+
+def _play_with_backend(filepath: Path) -> None:
+    """Backend orqali audio faylni o'ynatish."""
+    global _is_playing, _audio_backend
+
+    if _audio_backend == "none":
+        return
+
+    if _is_playing:
+        return
+
+    _is_playing = True
+    try:
+        if _audio_backend == "pygame":
+            import pygame
+            if pygame.mixer.music.get_busy():
+                return
+            pygame.mixer.music.load(str(filepath))
+            pygame.mixer.music.play()
+        elif _audio_backend == "afplay":
+            subprocess.Popen(
+                ["afplay", str(filepath)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        elif _audio_backend in ("paplay", "aplay"):
+            subprocess.Popen(
+                [_audio_backend, str(filepath)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+    except Exception as e:
+        logger.error(f"Ovozni o'ynatish xatosi: {e}")
+    finally:
+        _is_playing = False
+
 
 def prepare_voices():
-    """Checks if audio files exist, otherwise downloads them via gTTS. 
+    """Checks if audio files exist, otherwise downloads them via gTTS.
        This allows completely offline usage after the very first start."""
+    global _audio_backend
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
-    
+
+    _audio_backend = _detect_backend()
+
     for key, (filename, full_text) in ALERTS_DATA.items():
         filepath = AUDIO_DIR / filename
         if not filepath.exists():
             logger.info(f"Ovoz yuklanmoqda: {filename}...")
             try:
-                tts = gTTS(text=full_text, lang='uz', slow=False)
-                tts.save(str(filepath))
+                # gTTS 'uz' tilini qo'llab-quvvatlamaydi, 'tr' (turk) eng yaqin alternativ
+                for lang in ('uz', 'tr', 'en'):
+                    try:
+                        tts = gTTS(text=full_text, lang=lang, slow=False)
+                        tts.save(str(filepath))
+                        logger.info(f"Ovoz saqlandi ({lang}): {filename}")
+                        break
+                    except ValueError:
+                        continue
             except Exception as e:
                 logger.error(f"gTTS yuklashda xatolik: {e}")
 
-def _play_audio_thread(filepath: Path):
-    init_audio()
-    if not _is_mixer_initialized: return
-    
-    try:
-        # Avoid interrupting already playing alert
-        if pygame.mixer.music.get_busy():
-            return
-            
-        pygame.mixer.music.load(str(filepath))
-        pygame.mixer.music.play()
-    except Exception as e:
-        logger.error(f"Ovozni o'ynatish xatosi: {e}")
 
 def play_alert_for_issue(issue_key: str):
     """Plays the cached TTS alert for the given issue without freezing the app."""
     if issue_key in ALERTS_DATA:
         filename = ALERTS_DATA[issue_key][0]
         filepath = AUDIO_DIR / filename
-        
+
         if filepath.exists():
-            # Start in short living thread just in case load is blocking
-            threading.Thread(target=_play_audio_thread, args=(filepath,), daemon=True).start()
+            threading.Thread(target=_play_with_backend, args=(filepath,), daemon=True).start()

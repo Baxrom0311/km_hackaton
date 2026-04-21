@@ -8,7 +8,12 @@ Ishga tushirish rejimlari:
 Dastur faqat 1 nusxada ishlaydi (singleton lock).
 """
 
+import os
 import sys
+
+# SDL2 duplicate library warning'larni bostiramiz (cv2 + pygame konflikt)
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
 import argparse
 import threading
 from pathlib import Path
@@ -53,6 +58,10 @@ def main():
     configure_logging()
     args = parse_args()
 
+    # Ctrl+C bilan to'xtatish imkoniyati
+    import signal
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
     app = QApplication(sys.argv)
     app.setApplicationName("PostureAI")
     app.setQuitOnLastWindowClosed(False)  # Oyna yopilsa ham dastur ishlaydi
@@ -60,13 +69,17 @@ def main():
     # Singleton lock — faqat 1 nusxa
     shared_mem = QSharedMemory("PostureAI_Singleton_Lock")
     if not shared_mem.create(1):
-        logger.warning("Dastur allaqachon ishga tushirilgan.")
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Icon.Warning)
-        msg.setWindowTitle("Diqqat")
-        msg.setText("PostureAI allaqachon ishlamoqda.\nTray ikonkasini tekshiring.")
-        msg.exec()
-        sys.exit(0)
+        # Stale lock bo'lishi mumkin (pkill/crash dan keyin) — tozalashga urinish
+        shared_mem.attach()
+        shared_mem.detach()
+        if not shared_mem.create(1):
+            logger.warning("Dastur allaqachon ishga tushirilgan.")
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setWindowTitle("Diqqat")
+            msg.setText("PostureAI allaqachon ishlamoqda.\nTray ikonkasini tekshiring.")
+            msg.exec()
+            sys.exit(0)
 
     # Config yuklash
     config = load_config()

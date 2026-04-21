@@ -289,18 +289,32 @@ class DashboardPage(QWidget):
     def update_frame(self, frame):
         if frame is None:
             return
-        rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        h, w, ch = rgb_image.shape
-        bytes_per_line = ch * w
-        q_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
-        pixmap = QPixmap.fromImage(q_img)
-        self.lbl_camera.setPixmap(
-            pixmap.scaled(
-                self.lbl_camera.width(),
-                self.lbl_camera.height(),
-                Qt.AspectRatioMode.KeepAspectRatio,
+        try:
+            import numpy as np
+            rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb_image.shape
+
+            # Markazdan crop — faqat yuz va yelkalar ko'rinadi
+            crop_ratio = 0.75
+            crop_h = int(h * crop_ratio)
+            crop_w = int(w * crop_ratio)
+            y_start = (h - crop_h) // 2
+            x_start = (w - crop_w) // 2
+            rgb_image = np.ascontiguousarray(rgb_image[y_start:y_start + crop_h, x_start:x_start + crop_w])
+            h, w, ch = rgb_image.shape
+
+            bytes_per_line = ch * w
+            q_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+            pixmap = QPixmap.fromImage(q_img)
+            self.lbl_camera.setPixmap(
+                pixmap.scaled(
+                    self.lbl_camera.width(),
+                    self.lbl_camera.height(),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                )
             )
-        )
+        except Exception:
+            pass
 
     # ── Periodic stats refresh ──
 

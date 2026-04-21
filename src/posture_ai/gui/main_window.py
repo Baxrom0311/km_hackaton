@@ -46,6 +46,11 @@ class DashboardWindow(QMainWindow):
         self.resize(1000, 700)
         self.setStyleSheet(MAIN_STYLESHEET)
 
+        # ── Holat (boshqa modullar ishlatishidan oldin) ──
+        self.last_result = None
+        self.current_tray_status = "idle"
+        self.dimmer = ScreenDimmer()
+
         # ── Camera Worker ──
         self.worker = CameraWorker(config)
         self.worker.start()
@@ -61,9 +66,6 @@ class DashboardWindow(QMainWindow):
         self.worker.metrics_updated.connect(self.on_metrics_updated)
         self.worker.camera_error.connect(self.on_camera_error)
 
-        # ── Dimmer ──
-        self.dimmer = ScreenDimmer()
-
         # ── Periodic DB log (har 60 sekund) ──
         self.log_timer = QTimer(self)
         self.log_timer.timeout.connect(self.log_statistics)
@@ -73,10 +75,6 @@ class DashboardWindow(QMainWindow):
         self.tray_refresh_timer = QTimer(self)
         self.tray_refresh_timer.timeout.connect(self.refresh_tray_menu)
         self.tray_refresh_timer.start(5000)
-
-        # ── Holat ──
-        self.last_result = None
-        self.current_tray_status = "idle"
 
     # ══════════════════════════════════════════════════════
     # UI Setup

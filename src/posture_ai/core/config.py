@@ -10,21 +10,24 @@ class AppConfig(BaseModel):
 
     head_angle_threshold: float = Field(default=25.0, description="Boshingizni oldinga egishning taqiqlangan darajasi (gradus)")
     shoulder_diff_threshold: float = Field(default=0.07, description="Yelkalar orasidagi farqning ruxsat etilgan chegarasi (normallashgan)")
-    forward_lean_threshold: float = Field(default=-0.2, description="Oldinga engashish chegarasi")
+    forward_lean_threshold: float = Field(default=-0.35, description="Oldinga engashish chegarasi")
     
     temporal_window_size: int = Field(default=90, description="Datchiklarning yodida saqlanadigan ramkalar soni")
     temporal_threshold: float = Field(default=0.7, description="Signal yuborish uchun xato ramkalar foizi")
     cooldown_seconds: int = Field(default=60, description="Bildirishnomalar orasidagi vaqt")
     
     camera_index: int = Field(default=0)
-    fps: int = Field(default=10)
+    fps: int = Field(default=5, description="5 FPS yetarli — posture sekin o'zgaradi")
+    camera_width: int = Field(default=640, description="Kamera resolution kengligi")
+    camera_height: int = Field(default=480, description="Kamera resolution balandligi")
     language: str = Field(default="uz")
-    
-    min_visibility: float = 0.5
-    model_complexity: int = 2
-    min_detection_confidence: float = 0.5
-    min_pose_presence_confidence: float = 0.5
-    min_tracking_confidence: float = 0.5
+
+    min_visibility: float = 0.3  # Yaqin/uzoqda ham ishlasin
+    model_complexity: int = 1    # 1=lite (tez), 2=heavy (aniq lekin sekin)
+    min_detection_confidence: float = 0.4
+    min_pose_presence_confidence: float = 0.4
+    min_tracking_confidence: float = 0.4
+    ai_skip_frames: int = Field(default=2, description="Har N-chi kadrda AI ishlaydi (CPU tejash)")
     
     stats_log_interval_seconds: int = 60
     calibration_seconds: int = 12
