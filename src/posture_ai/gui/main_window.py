@@ -29,7 +29,7 @@ from posture_ai.gui.pages.camera import CameraPage
 from posture_ai.gui.pages.dashboard import DashboardPage
 from posture_ai.gui.pages.calibration import CalibrationPage
 from posture_ai.gui.pages.settings import SettingsPage
-from posture_ai.gui.tray_icons import get_tray_icon
+from posture_ai.gui.tray_icons import get_app_icon, get_tray_icon
 
 
 class DashboardWindow(QMainWindow):
@@ -51,6 +51,7 @@ class DashboardWindow(QMainWindow):
         self._sidebar_animation: QParallelAnimationGroup | None = None
 
         self.setWindowTitle("PostureAI - AI HEALTH")
+        self.setWindowIcon(get_app_icon())
         self.resize(1000, 700)
         self.setStyleSheet(MAIN_STYLESHEET)
 

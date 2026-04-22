@@ -188,12 +188,22 @@ def _run_gui(config: AppConfig, storage: Storage, *, start_minimized: bool) -> i
     from PySide6.QtWidgets import QApplication, QMessageBox
 
     from posture_ai.gui.main_window import DashboardWindow
+    from posture_ai.gui.tray_icons import get_app_icon
     from posture_ai.os_utils.audio_helper import prepare_voices
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("PostureAI.Desktop")
+        except Exception:
+            logger.debug("Windows AppUserModelID sozlanmadi.")
 
     app = QApplication(sys.argv)
     app.setApplicationName("PostureAI")
+    app.setApplicationDisplayName("PostureAI")
+    app.setWindowIcon(get_app_icon())
     app.setQuitOnLastWindowClosed(False)
 
     shared_mem = QSharedMemory("PostureAI_Singleton_Lock")
