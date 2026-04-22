@@ -46,11 +46,13 @@ class StorageTests(unittest.TestCase):
             self.assertEqual(today_stats["good_pct"], 50.0)
             self.assertEqual(today_stats["bad_pct"], 50.0)
             self.assertEqual(today_stats["avg_score"], 60.0)
+            self.assertEqual(today_stats["avg_ergonomic"], 60.0)
             self.assertEqual(today_stats["total_samples"], 2)
             self.assertEqual(today_stats["alerts_count"], 1)
             self.assertEqual(len(weekly_summary), 1)
             self.assertEqual(weekly_summary[0]["good_pct"], 50.0)
             self.assertEqual(weekly_summary[0]["avg_score"], 60.0)
+            self.assertEqual(weekly_summary[0]["avg_ergonomic"], 60.0)
 
 
 if __name__ == "__main__":

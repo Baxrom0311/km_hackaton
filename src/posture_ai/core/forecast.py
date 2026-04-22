@@ -28,6 +28,10 @@ class RiskForecast:
     `category` — "low" / "moderate" / "high" / "critical".
     `recommendation` — foydalanuvchiga aniq amaliy maslahat.
     `model_used` — qaysi model(lar) ishlatilgani.
+    `r_squared` — model aniqlik koeffitsienti (0..1, 1 = mukammal fit).
+    `mape` — Mean Absolute Percentage Error (%).
+    `confidence_lower` — 7 kunlik prognoz pastki chegarasi (80% CI).
+    `confidence_upper` — 7 kunlik prognoz yuqori chegarasi (80% CI).
     """
 
     current_risk: float
@@ -37,6 +41,10 @@ class RiskForecast:
     category: str
     recommendation: str
     model_used: str = "ensemble"
+    r_squared: float = 0.0
+    mape: float = 0.0
+    confidence_lower: float = 0.0
+    confidence_upper: float = 0.0
 
 
 # ═══════════════════════════════════════════════════════════
@@ -174,6 +182,70 @@ def _categorise(risk: float) -> str:
     return "critical"
 
 
+def _compute_r_squared(actual: Sequence[float], predicted: Sequence[float]) -> float:
+    """Determinatsiya koeffitsienti (R²).
+
+    1.0 = mukammal model, 0.0 = model o'rtachadan yaxshi emas,
+    <0.0 = model o'rtachadan yomonroq.
+    """
+    n = len(actual)
+    if n < 2:
+        return 0.0
+    mean_y = sum(actual) / n
+    ss_tot = sum((y - mean_y) ** 2 for y in actual)
+    if ss_tot == 0:
+        return 1.0
+    ss_res = sum((a - p) ** 2 for a, p in zip(actual, predicted))
+    return max(0.0, 1.0 - ss_res / ss_tot)
+
+
+def _compute_mape(actual: Sequence[float], predicted: Sequence[float]) -> float:
+    """Mean Absolute Percentage Error (%).
+
+    Har bir kuzatuvdagi xato foizini o'rtachalaydi.
+    """
+    n = len(actual)
+    if n == 0:
+        return 0.0
+    total = 0.0
+    count = 0
+    for a, p in zip(actual, predicted):
+        if abs(a) > 1e-6:
+            total += abs((a - p) / a) * 100.0
+            count += 1
+    return total / max(count, 1)
+
+
+def _compute_confidence_interval(
+    values: Sequence[float],
+    projected: float,
+    z: float = 1.28,
+) -> tuple[float, float]:
+    """80% confidence interval (z=1.28) for projected value.
+
+    Ensemble modelning leave-one-out xatosi asosida standart
+    deviation hisoblanadi va interval quriladi.
+    """
+    n = len(values)
+    if n < 3:
+        return max(0.0, projected - 15.0), min(100.0, projected + 15.0)
+
+    # Leave-one-out cross-validation xatolari
+    errors: list[float] = []
+    for i in range(n):
+        train = list(values[:i]) + list(values[i + 1:])
+        pred = _ensemble_predict(train, 1)
+        errors.append(values[i] - pred)
+
+    mean_err = sum(errors) / len(errors)
+    std_err = math.sqrt(sum((e - mean_err) ** 2 for e in errors) / len(errors))
+    std_err = max(std_err, 2.0)
+
+    lower = max(0.0, projected - z * std_err)
+    upper = min(100.0, projected + z * std_err)
+    return round(lower, 1), round(upper, 1)
+
+
 def _build_recommendation(category: str, slope: float, current_risk: float) -> str:
     if category == "low":
         if slope > 1.0:
@@ -217,8 +289,9 @@ def forecast_risk(weekly_summary: list[dict]) -> RiskForecast | None:
     daily_scores: list[float] = []
     for row in weekly_summary:
         score = row.get("avg_ergonomic")
-        if score is None:
-            score = row.get("avg_score")
+        fallback_score = row.get("avg_score")
+        if score is None or (float(score) <= 0.0 and fallback_score is not None):
+            score = fallback_score
         if score is not None and score >= 0:
             daily_scores.append(float(score))
 
@@ -257,6 +330,12 @@ def forecast_risk(weekly_summary: list[dict]) -> RiskForecast | None:
     category = _categorise(current_risk)
     recommendation = _build_recommendation(category, slope, current_risk)
 
+    # Model aniqlik metrikalari
+    fitted = [max(0.0, min(100.0, _ensemble_predict(daily_risks, i - n + 1))) for i in range(n)]
+    r_squared = _compute_r_squared(daily_risks, fitted)
+    mape = _compute_mape(daily_risks, fitted)
+    conf_lower, conf_upper = _compute_confidence_interval(daily_risks, projected_risk_7d)
+
     return RiskForecast(
         current_risk=round(current_risk, 1),
         projected_risk_7d=round(projected_risk_7d, 1),
@@ -265,4 +344,8 @@ def forecast_risk(weekly_summary: list[dict]) -> RiskForecast | None:
         category=category,
         recommendation=recommendation,
         model_used="ensemble(linear+holt+wma)",
+        r_squared=round(r_squared, 3),
+        mape=round(mape, 1),
+        confidence_lower=conf_lower,
+        confidence_upper=conf_upper,
     )

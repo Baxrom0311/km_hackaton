@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Callable, Sequence
 
@@ -101,6 +102,10 @@ def sit_duration_risk(
     return (continuous_sit_seconds - comfort_max_seconds) / span
 
 
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
+
 def is_facing_camera(landmarks: Sequence, threshold: float = 0.12) -> bool:
     """Foydalanuvchi kameraga qarayotganini aniqlaydi.
 
@@ -168,6 +173,12 @@ def compute_fatigue_score(
     continuous_sit_seconds: float,
     continuous_gaze_seconds: float,
     face_distance: float | None,
+    posture_trend_risk: float = 0.0,
+    movement_risk: float = 0.0,
+    head_drop_risk: float = 0.0,
+    posture_stability_risk: float = 0.0,
+    spine_score: float | None = None,
+    shoulder_elevation_risk: float = 0.0,
 ) -> int:
     """Charchoq riskini 0..100 oraliqda baholaydi.
 
@@ -196,6 +207,19 @@ def compute_fatigue_score(
         + (posture_risk * 25.0)
         + (eye_risk * 15.0)
     )
+    spine_risk = 0.0
+    if spine_score is not None:
+        spine_risk = _clamp01((70.0 - float(spine_score)) / 70.0)
+
+    dynamic_penalty = (
+        (_clamp01(posture_trend_risk) * 10.0)
+        + (_clamp01(movement_risk) * 8.0)
+        + (_clamp01(head_drop_risk) * 8.0)
+        + (_clamp01(posture_stability_risk) * 5.0)
+        + (spine_risk * 6.0)
+        + (_clamp01(shoulder_elevation_risk) * 3.0)
+    )
+    score += dynamic_penalty
     return max(0, min(100, round(score)))
 
 
@@ -248,6 +272,133 @@ class FatigueAlertTracker:
             return False
         self.last_alert_at = now
         return True
+
+
+@dataclass(slots=True)
+class FatigueSignalState:
+    posture_trend_risk: float = 0.0
+    movement_risk: float = 0.0
+    head_drop_risk: float = 0.0
+    posture_stability_risk: float = 0.0
+    spine_score: int | None = None
+    shoulder_elevation_risk: float = 0.0
+    posture_slope_per_minute: float = 0.0
+    micro_movement_rate: float = 0.0
+
+    def as_factors(self) -> dict[str, float]:
+        factors = {
+            "posture_trend": self.posture_trend_risk,
+            "low_movement": self.movement_risk,
+            "head_drop": self.head_drop_risk,
+            "posture_instability": self.posture_stability_risk,
+            "spine_alignment": _clamp01((70.0 - float(self.spine_score or 70)) / 70.0),
+            "shoulder_elevation": self.shoulder_elevation_risk,
+        }
+        return {key: round(value, 3) for key, value in factors.items()}
+
+
+@dataclass(slots=True)
+class FatigueSignalTracker:
+    """Sessiya ichidagi dinamik charchoq signallarini kuzatadi."""
+
+    time_fn: Callable[[], float] = time.monotonic
+    trend_window_sec: float = 15 * 60.0
+    movement_window_sec: float = 2 * 60.0
+    stability_window_sec: float = 5 * 60.0
+    motion_threshold: float = 5.0
+    posture_samples: deque[tuple[float, float]] = field(default_factory=deque, init=False)
+    head_samples: deque[tuple[float, float]] = field(default_factory=deque, init=False)
+    movement_events: deque[float] = field(default_factory=deque, init=False)
+    head_drop_events: deque[float] = field(default_factory=deque, init=False)
+    last_head_angle: float | None = field(default=None, init=False)
+
+    def _trim(self, now: float) -> None:
+        while self.posture_samples and (now - self.posture_samples[0][0]) > self.trend_window_sec:
+            self.posture_samples.popleft()
+        while self.head_samples and (now - self.head_samples[0][0]) > self.stability_window_sec:
+            self.head_samples.popleft()
+        while self.movement_events and (now - self.movement_events[0]) > self.movement_window_sec:
+            self.movement_events.popleft()
+        while self.head_drop_events and (now - self.head_drop_events[0]) > self.stability_window_sec:
+            self.head_drop_events.popleft()
+
+    @staticmethod
+    def _linear_slope_per_minute(samples: Sequence[tuple[float, float]]) -> float:
+        if len(samples) < 3:
+            return 0.0
+        first_t = samples[0][0]
+        xs = [(t - first_t) / 60.0 for t, _value in samples]
+        ys = [value for _t, value in samples]
+        mean_x = sum(xs) / len(xs)
+        mean_y = sum(ys) / len(ys)
+        denominator = sum((x - mean_x) ** 2 for x in xs)
+        if denominator <= 1e-9:
+            return 0.0
+        numerator = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys))
+        return numerator / denominator
+
+    @staticmethod
+    def _score_stddev(values: Sequence[float]) -> float:
+        if len(values) < 3:
+            return 0.0
+        mean = sum(values) / len(values)
+        variance = sum((value - mean) ** 2 for value in values) / len(values)
+        return math.sqrt(variance)
+
+    def observe(
+        self,
+        *,
+        posture_score: float | None,
+        head_angle: float | None,
+        spine_score: int | None,
+        shoulder_elevation: float | None,
+        motion_level: float | None = None,
+    ) -> FatigueSignalState:
+        now = self.time_fn()
+        if posture_score is not None:
+            self.posture_samples.append((now, float(posture_score)))
+        if head_angle is not None:
+            self.head_samples.append((now, float(head_angle)))
+            if self.last_head_angle is not None and head_angle >= 35.0 and (head_angle - self.last_head_angle) >= 8.0:
+                self.head_drop_events.append(now)
+            self.last_head_angle = float(head_angle)
+        if motion_level is not None and motion_level >= self.motion_threshold:
+            self.movement_events.append(now)
+
+        self._trim(now)
+
+        slope = self._linear_slope_per_minute(tuple(self.posture_samples))
+        posture_trend_risk = _clamp01((-slope - 0.4) / 2.6)
+
+        movement_rate = 0.0
+        movement_risk = 0.0
+        if motion_level is not None and self.movement_window_sec > 0:
+            movement_rate = len(self.movement_events) / (self.movement_window_sec / 60.0)
+            movement_risk = _clamp01((4.0 - movement_rate) / 4.0)
+
+        head_drop_risk = 0.0
+        if self.head_samples:
+            recent_angles = [angle for _t, angle in self.head_samples]
+            high_angles = sum(1 for angle in recent_angles if angle >= 35.0)
+            head_drop_risk = _clamp01(high_angles / max(len(recent_angles), 1))
+            head_drop_risk = max(head_drop_risk, _clamp01(len(self.head_drop_events) / 3.0))
+            if recent_angles[-1] >= 42.0:
+                head_drop_risk = max(head_drop_risk, 0.75)
+
+        posture_values = [value for _t, value in self.posture_samples if (now - _t) <= self.stability_window_sec]
+        stddev = self._score_stddev(posture_values)
+        posture_stability_risk = _clamp01((stddev - 8.0) / 12.0)
+
+        return FatigueSignalState(
+            posture_trend_risk=posture_trend_risk,
+            movement_risk=movement_risk,
+            head_drop_risk=head_drop_risk,
+            posture_stability_risk=posture_stability_risk,
+            spine_score=spine_score,
+            shoulder_elevation_risk=_clamp01(shoulder_elevation or 0.0),
+            posture_slope_per_minute=round(slope, 3),
+            micro_movement_rate=round(movement_rate, 2),
+        )
 
 
 def compute_ergonomic_score(

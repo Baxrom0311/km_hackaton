@@ -7,6 +7,7 @@ from posture_ai.vision.detector import PoseDetector, PostureResult
 from posture_ai.core.filter import TemporalFilter
 from posture_ai.core.ergonomics import (
     FatigueAlertTracker,
+    FatigueSignalTracker,
     SitDurationTracker,
     EyeGazeTracker,
     compute_ergonomic_score,
@@ -66,8 +67,9 @@ class CameraWorker(QThread):
             threshold=config.fatigue_alert_threshold,
             cooldown_sec=config.fatigue_alert_cooldown_seconds,
         )
+        self.fatigue_signal_tracker = FatigueSignalTracker()
 
-    def _handle_result(self, result: PostureResult) -> None:
+    def _handle_result(self, result: PostureResult, motion_level: float | None = None) -> None:
         person_present = not result.skipped and result.posture_score is not None
         facing_screen = bool(result.facing_camera) if person_present else False
 
@@ -76,6 +78,18 @@ class CameraWorker(QThread):
 
         result.sit_seconds = round(self.sit_tracker.continuous_sit_seconds, 1)
         if result.posture_score is not None:
+            fatigue_signals = self.fatigue_signal_tracker.observe(
+                posture_score=result.posture_score,
+                head_angle=result.head_angle,
+                spine_score=getattr(result, "spine_score", None),
+                shoulder_elevation=getattr(result, "shoulder_elevation", None),
+                motion_level=motion_level,
+            )
+            result.posture_trend_risk = fatigue_signals.posture_trend_risk
+            result.movement_risk = fatigue_signals.movement_risk
+            result.head_drop_risk = fatigue_signals.head_drop_risk
+            result.posture_stability_risk = fatigue_signals.posture_stability_risk
+            result.fatigue_factors = fatigue_signals.as_factors()
             result.ergonomic_score = compute_ergonomic_score(
                 result.posture_score,
                 continuous_sit_seconds=result.sit_seconds,
@@ -87,6 +101,12 @@ class CameraWorker(QThread):
                 continuous_sit_seconds=result.sit_seconds,
                 face_distance=result.face_distance,
                 continuous_gaze_seconds=self.gaze_tracker.continuous_gaze_seconds,
+                posture_trend_risk=fatigue_signals.posture_trend_risk,
+                movement_risk=fatigue_signals.movement_risk,
+                head_drop_risk=fatigue_signals.head_drop_risk,
+                posture_stability_risk=fatigue_signals.posture_stability_risk,
+                spine_score=getattr(result, "spine_score", None),
+                shoulder_elevation_risk=getattr(result, "shoulder_elevation", 0.0) or 0.0,
             )
             result.fatigue_level = fatigue_level(result.fatigue_score)
             result.fatigue_advice = fatigue_advice(
@@ -176,13 +196,6 @@ class CameraWorker(QThread):
         return float(np.mean(diff))
 
     def run(self):
-        # OS darajasida past prioritet
-        try:
-            import os
-            os.nice(10)
-        except (OSError, AttributeError):
-            pass
-
         fps = max(self.config.fps, 1)
         frame_interval = 1.0 / fps
         ai_skip = max(1, getattr(self.config, "ai_skip_frames", 2))
@@ -261,7 +274,7 @@ class CameraWorker(QThread):
             if not has_motion and not force_ai_sampling:
                 if (started_at - last_ai_at) >= self.STATIC_RECHECK_INTERVAL:
                     ai_started_at = time.monotonic()
-                    self._handle_result(self.detector.process_frame(frame))
+                    self._handle_result(self.detector.process_frame(frame), motion_level=motion)
                     last_ai_at = time.monotonic()
                     ai_elapsed = last_ai_at - ai_started_at
                     if ai_elapsed > ai_min_interval and (last_ai_at - last_slow_ai_log_at) >= self.SLOW_AI_LOG_INTERVAL:
@@ -279,7 +292,7 @@ class CameraWorker(QThread):
 
             if run_ai:
                 ai_started_at = time.monotonic()
-                self._handle_result(self.detector.process_frame(frame))
+                self._handle_result(self.detector.process_frame(frame), motion_level=motion)
                 last_ai_at = time.monotonic()
                 ai_elapsed = last_ai_at - ai_started_at
                 if ai_elapsed > ai_min_interval and (last_ai_at - last_slow_ai_log_at) >= self.SLOW_AI_LOG_INTERVAL:

@@ -18,7 +18,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from posture_ai.core.config import AppConfig, get_default_db_path, load_config
+from posture_ai.core.config import AppConfig, get_default_db_path, load_config, resolve_model_asset_path
 from posture_ai.core.forecast import forecast_risk
 from posture_ai.database.storage import Storage
 from posture_ai.vision.detector import PoseDetector, check_runtime_dependencies
@@ -125,6 +125,10 @@ def render_stats_report(config: AppConfig, db_path: str | Path | None = None) ->
                     f"slope/day={forecast.slope_per_day:+.2f}"
                 ),
                 f"  30 kunda og'riq ehtimoli: {forecast.pain_probability_30d * 100:.0f}%",
+                (
+                    f"  Model: R²={forecast.r_squared:.3f} | MAPE={forecast.mape:.1f}% | "
+                    f"80% CI=[{forecast.confidence_lower:.1f}, {forecast.confidence_upper:.1f}]"
+                ),
                 f"  Tavsiya: {forecast.recommendation}",
             ]
         )
@@ -147,7 +151,7 @@ def run_doctor(config: AppConfig, db_path: str | Path | None = None) -> int:
     else:
         lines.append("- Dependencies: ok")
 
-    model_path = Path(config.model_asset_path).expanduser()
+    model_path = resolve_model_asset_path(config.model_asset_path)
     if model_path.exists():
         lines.append(f"- Model: ok ({model_path})")
     else:

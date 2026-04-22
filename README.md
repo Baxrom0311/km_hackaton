@@ -3,7 +3,7 @@
 <div align="center">
   <h3>Sun'iy intellekt asosidagi ergonomik xavf monitoringi va prognozlash tizimi</h3>
   
-  [![Hackathon](https://img.shields.io/badge/AI_HEALTH-2026-00f5d4?style=for-the-badge)](rules.txt)
+  ![Hackathon](https://img.shields.io/badge/AI_HEALTH-2026-00f5d4?style=for-the-badge)
   [![MVP Validated](https://img.shields.io/badge/MVP-100%25_TESTED-7b61ff?style=for-the-badge)](TEST_REPORT.md)
   [![References](https://img.shields.io/badge/ILMIY_ASOS-15%2B_MANBA-ff9f43?style=for-the-badge)](REFERENCES.md)
 </div>
@@ -47,7 +47,8 @@ pip install -r requirements.txt
 python main.py --doctor
 
 # 3. (Ixtiyoriy) Demo uchun 7 kunlik mock ma'lumot yaratish
-python generate_mock_data.py
+# Diqqat: mavjud demo/user statistikani o'chirish uchun --reset aniq beriladi
+python generate_mock_data.py --reset
 
 # 4. To'laqonli grafik interfeysli oynani ochish
 python main.py

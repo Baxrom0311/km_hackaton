@@ -7,7 +7,10 @@ Windows: HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run
 
 import sys
 import shutil
+import shlex
+import subprocess
 from pathlib import Path
+from xml.sax.saxutils import escape
 from loguru import logger
 
 APP_NAME = "PostureAI"
@@ -15,10 +18,15 @@ APP_NAME = "PostureAI"
 
 def _get_executable() -> str:
     """Hozirgi ishga tushirilgan dastur yo'lini aniqlash."""
+    return shlex.join(_get_command_args())
+
+
+def _get_command_args() -> list[str]:
+    """Autostart uchun executable va argumentlarni shell split qilmasdan qaytaradi."""
     exe = shutil.which("posture-ai")
     if exe:
-        return exe
-    return f"{sys.executable} -m posture_ai.main"
+        return [exe]
+    return [sys.executable, "-m", "posture_ai.main"]
 
 
 # ═══ macOS ═══
@@ -50,10 +58,8 @@ _PLIST_TEMPLATE = """\
 def _macos_enable() -> bool:
     try:
         _LAUNCH_AGENT_DIR.mkdir(parents=True, exist_ok=True)
-        exe = _get_executable()
-        args = exe.split()
-        args.append("--background")
-        args_xml = "\n        ".join(f"<string>{a}</string>" for a in args)
+        args = _get_command_args() + ["--background"]
+        args_xml = "\n        ".join(f"<string>{escape(a)}</string>" for a in args)
         _PLIST_PATH.write_text(
             _PLIST_TEMPLATE.format(program_args=args_xml), encoding="utf-8"
         )
@@ -99,7 +105,7 @@ Comment=Ergonomik holat monitoring tizimi
 def _linux_enable() -> bool:
     try:
         _LINUX_AUTOSTART_DIR.mkdir(parents=True, exist_ok=True)
-        exe = _get_executable()
+        exe = shlex.join(_get_command_args())
         _DESKTOP_PATH.write_text(
             _DESKTOP_TEMPLATE.format(exe=exe), encoding="utf-8"
         )
@@ -134,8 +140,7 @@ _WIN_REG_NAME = "PostureAI"
 def _windows_enable() -> bool:
     try:
         import winreg
-        exe = _get_executable()
-        cmd = f'"{exe}" --background' if " " not in exe else f"{exe} --background"
+        cmd = subprocess.list2cmdline(_get_command_args() + ["--background"])
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _WIN_REG_KEY, 0, winreg.KEY_SET_VALUE)
         winreg.SetValueEx(key, _WIN_REG_NAME, 0, winreg.REG_SZ, cmd)
         winreg.CloseKey(key)

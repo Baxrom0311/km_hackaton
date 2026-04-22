@@ -9,6 +9,7 @@ posture score pasayib boradi → Forecast xavf oshganini ko'rsatadi.
 
 import random
 import sqlite3
+import argparse
 from datetime import datetime, timedelta
 from pathlib import Path
 import sys
@@ -21,7 +22,7 @@ if str(SRC) not in sys.path:
 from posture_ai.core.config import get_default_db_path
 
 
-def generate_mock_data(db_path: str | None = None) -> None:
+def generate_mock_data(db_path: str | None = None, *, reset: bool = False) -> None:
     resolved_db_path = db_path or str(get_default_db_path())
     conn = sqlite3.connect(resolved_db_path)
     cursor = conn.cursor()
@@ -45,7 +46,8 @@ def generate_mock_data(db_path: str | None = None) -> None:
             posture_score REAL,
             ergonomic_score REAL,
             sit_seconds REAL,
-            face_distance REAL
+            face_distance REAL,
+            fatigue_score REAL
         );
 
         CREATE TABLE IF NOT EXISTS alerts (
@@ -54,11 +56,26 @@ def generate_mock_data(db_path: str | None = None) -> None:
             issues TEXT
         );
     """)
+    existing_columns = {
+        row[1] for row in cursor.execute("PRAGMA table_info(posture_logs)").fetchall()
+    }
+    if "fatigue_score" not in existing_columns:
+        cursor.execute("ALTER TABLE posture_logs ADD COLUMN fatigue_score REAL")
 
-    print("Oldingi ma'lumotlar tozalanmoqda...")
-    cursor.execute("DELETE FROM posture_logs")
-    cursor.execute("DELETE FROM alerts")
-    cursor.execute("DELETE FROM sessions")
+    existing_count = cursor.execute("SELECT COUNT(*) FROM posture_logs").fetchone()[0]
+    if existing_count and not reset:
+        conn.close()
+        raise RuntimeError(
+            f"{resolved_db_path} ichida {existing_count} ta posture log bor. "
+            "Mavjud ma'lumotlarni o'chirish uchun --reset flagini aniq bering "
+            "yoki --db orqali boshqa demo DB yo'lini tanlang."
+        )
+
+    if reset:
+        print("Oldingi ma'lumotlar tozalanmoqda (--reset tasdiqlandi)...")
+        cursor.execute("DELETE FROM posture_logs")
+        cursor.execute("DELETE FROM alerts")
+        cursor.execute("DELETE FROM sessions")
 
     today = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0)
     random.seed(42)  # Reproducible natijalar
@@ -109,14 +126,15 @@ def generate_mock_data(db_path: str | None = None) -> None:
             ergonomic_score = max(5, min(100, round(
                 posture_score - sit_penalty - eye_penalty
             )))
+            fatigue_score = max(0, min(100, round(100 - ergonomic_score + sit_penalty * 0.4)))
 
             cursor.execute(
                 """INSERT INTO posture_logs
                    (session_id, timestamp, status, head_angle, shoulder_diff,
-                    forward_lean, posture_score, ergonomic_score, sit_seconds, face_distance)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    forward_lean, posture_score, ergonomic_score, sit_seconds, face_distance, fatigue_score)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (session_id, timestamp, status, head_angle, shoulder_diff,
-                 forward_lean, posture_score, ergonomic_score, sit_seconds, face_distance),
+                 forward_lean, posture_score, ergonomic_score, sit_seconds, face_distance, fatigue_score),
             )
 
         # Har kunda 1-3 ta alert
@@ -148,10 +166,22 @@ def generate_mock_data(db_path: str | None = None) -> None:
     conn.commit()
     conn.close()
 
-    print("7 kunlik demo ma'lumotlar muvaffaqiyatli yaratildi!")
+    print(f"7 kunlik demo ma'lumotlar muvaffaqiyatli yaratildi: {resolved_db_path}")
     print("Endi dasturni ishga tushiring: python main.py")
     print("Dashboard'da haftalik trend va Predictive Forecast ko'rinadi.")
 
 
 if __name__ == "__main__":
-    generate_mock_data()
+    parser = argparse.ArgumentParser(description="PostureAI demo ma'lumot generatori")
+    parser.add_argument("--db", default=None, help="SQLite DB yo'li (default: PostureAI user DB)")
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Mavjud sessions/posture_logs/alerts ma'lumotlarini o'chirib qayta yozish",
+    )
+    args = parser.parse_args()
+    try:
+        generate_mock_data(args.db, reset=args.reset)
+    except RuntimeError as exc:
+        print(f"Xato: {exc}", file=sys.stderr)
+        raise SystemExit(1)

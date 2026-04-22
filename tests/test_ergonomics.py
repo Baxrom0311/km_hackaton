@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from posture_ai.core.ergonomics import (
     EyeGazeTracker,
     FatigueAlertTracker,
+    FatigueSignalTracker,
     SitDurationTracker,
     compute_ergonomic_score,
     compute_fatigue_score,
@@ -274,6 +275,63 @@ class FatigueTests(unittest.TestCase):
 
         clock.advance(61)
         self.assertTrue(tracker.needs_fatigue_alert(80))
+
+    def test_dynamic_fatigue_signals_detect_posture_degradation(self) -> None:
+        clock = FakeClock()
+        tracker = FatigueSignalTracker(time_fn=clock)
+
+        for score in (90, 86, 80, 73, 66):
+            state = tracker.observe(
+                posture_score=score,
+                head_angle=12,
+                spine_score=score,
+                shoulder_elevation=0.0,
+                motion_level=10.0,
+            )
+            clock.advance(60)
+
+        self.assertGreater(state.posture_trend_risk, 0.5)
+        self.assertLess(state.movement_risk, 0.8)
+
+    def test_dynamic_fatigue_signals_detect_low_movement_and_head_drop(self) -> None:
+        clock = FakeClock()
+        tracker = FatigueSignalTracker(time_fn=clock)
+
+        for head_angle in (12, 14, 38, 44):
+            state = tracker.observe(
+                posture_score=72,
+                head_angle=head_angle,
+                spine_score=55,
+                shoulder_elevation=0.8,
+                motion_level=0.0,
+            )
+            clock.advance(30)
+
+        self.assertGreater(state.movement_risk, 0.5)
+        self.assertGreater(state.head_drop_risk, 0.4)
+        self.assertGreater(state.as_factors()["shoulder_elevation"], 0.7)
+
+    def test_fatigue_score_accepts_dynamic_risk_inputs(self) -> None:
+        baseline = compute_fatigue_score(
+            posture_score=80,
+            continuous_sit_seconds=10 * 60,
+            continuous_gaze_seconds=10 * 60,
+            face_distance=0.12,
+        )
+        dynamic = compute_fatigue_score(
+            posture_score=80,
+            continuous_sit_seconds=10 * 60,
+            continuous_gaze_seconds=10 * 60,
+            face_distance=0.12,
+            posture_trend_risk=1.0,
+            movement_risk=1.0,
+            head_drop_risk=1.0,
+            posture_stability_risk=1.0,
+            spine_score=45,
+            shoulder_elevation_risk=1.0,
+        )
+
+        self.assertGreater(dynamic, baseline)
 
 
 if __name__ == "__main__":

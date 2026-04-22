@@ -23,6 +23,7 @@ ALERTS_DATA = {
     "Bo'yningizni to'g'rilang!": ("neck_rot.mp3", "Bo'yningiz burilgan, kameraga to'g'ri qarang!"),
     "Boshingiz qiyshaygan!": ("head_tilt.mp3", "Boshingiz yon tomonga qiyshaygan, tekis tuting!"),
     "Yelkalaringizni oching!": ("slouch.mp3", "Yelkalaringiz oldinga bukilgan, ko'ksingizni oching va orqaga torting!"),
+    "Yelkangizni bo'shashtiring!": ("shoulder_relax.mp3", "Yelkangiz ko'tarilgan, chuqur nafas oling va yelkalarni bo'shashtiring!"),
     "Ekranga yaqin!": ("close.mp3", "Ekranga juda yaqinsiz, ko'zingizni asrang!"),
     "Ekrandan juda uzoqsiz!": ("too_far.mp3", "Ekrandan juda uzoqda o'tiribsiz, biroz yaqinroq keling!"),
     "Ekranga juda yaqinsiz!": ("too_close.mp3", "Ekranga juda yaqinsiz, biroz uzoqroq o'tiring!"),

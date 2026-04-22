@@ -172,8 +172,20 @@ class DashboardPage(QWidget):
             "background-color: #05070e; border: 2px solid #1a0533; border-radius: 12px;"
         )
 
+        # Kamera ostida: joriy holatni ko'rsatuvchi panel
+        self.lbl_live_issues = QLabel("")
+        self.lbl_live_issues.setWordWrap(True)
+        self.lbl_live_issues.setMinimumHeight(50)
+        self.lbl_live_issues.setStyleSheet(
+            "background-color: rgba(0, 245, 212, 0.06); "
+            "border: 1px solid rgba(0, 245, 212, 0.15); border-radius: 8px; "
+            "padding: 10px; font-size: 14px; color: #d0d0d0;"
+        )
+        self.lbl_live_issues.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         left_layout.addWidget(lbl_title)
         left_layout.addWidget(self.lbl_camera, stretch=1)
+        left_layout.addWidget(self.lbl_live_issues)
 
         # ═══════ RIGHT COLUMN ═══════
         right_widget = QWidget()
@@ -413,6 +425,49 @@ class DashboardPage(QWidget):
             self.card_fatigue.set_value(f"{label} {fatigue_score}")
             self.card_fatigue.lbl_value.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {color};")
 
+        fatigue_factor_labels = {
+            "posture_trend": "trend",
+            "low_movement": "harakat",
+            "head_drop": "bosh",
+            "posture_instability": "barqarorlik",
+            "spine_alignment": "spine",
+            "shoulder_elevation": "yelka",
+        }
+        fatigue_factors = getattr(result, "fatigue_factors", {}) or {}
+        top_factors = [
+            fatigue_factor_labels.get(name, name)
+            for name, value in sorted(fatigue_factors.items(), key=lambda item: item[1], reverse=True)
+            if value >= 0.35
+        ][:3]
+        factor_line = ""
+        if top_factors:
+            factor_line = (
+                "<br><span style='color:#a0aabf;'>Charchoq signallari: "
+                + ", ".join(top_factors)
+                + "</span>"
+            )
+
+        # Live issues paneli
+        if result.skipped:
+            self.lbl_live_issues.setText(
+                "<span style='color:#ff9f43;'>Kamera oldida odam aniqlanmadi. "
+                "Yuzingiz va yelkalaringiz ko'rinsin.</span>"
+            )
+        elif result.issues:
+            issues_html = " &nbsp;|&nbsp; ".join(
+                f"<span style='color:#ff4d4f; font-weight:bold;'>{issue}</span>"
+                for issue in result.issues[:3]
+            )
+            advice = getattr(result, "fatigue_advice", None)
+            advice_line = f"<br><span style='color:#7b61ff;'>{advice}</span>" if advice else ""
+            self.lbl_live_issues.setText(issues_html + advice_line + factor_line)
+        else:
+            self.lbl_live_issues.setText(
+                "<span style='color:#00f5d4; font-weight:bold;'>Holatingiz yaxshi! "
+                "Shu holatni davom ettiring.</span>"
+                + factor_line
+            )
+
     def update_frame(self, frame):
         if frame is None:
             return
@@ -459,14 +514,60 @@ class DashboardPage(QWidget):
         if not file_path:
             return
 
-        import datetime
         today = datetime.date.today().isoformat()
-        
-        # Dashboard label'laridan ma'lumotlarni o'qiymiz (chunki refresh_today_stats orqali yuklangan)
-        good_pct_str = self.lbl_good_pct.text()
-        bad_pct_str = self.lbl_bad_pct.text()
-        avg_ergo_str = self.lbl_avg_ergo.text()
-        alerts_str = self.lbl_alerts.text()
+        stats = self.storage.get_today_stats()
+        weekly = self.storage.get_weekly_summary()
+        forecast = forecast_risk(weekly)
+        frequent = self.storage.get_today_frequent_issues()
+        exercises = recommend_exercises(frequent, max_exercises=3) if frequent else []
+
+        # Haftalik jadval
+        weekly_rows = ""
+        for row in weekly:
+            weekly_rows += (
+                f"<tr><td>{row['day']}</td>"
+                f"<td class='good'>{row['good_pct']}%</td>"
+                f"<td>{row['avg_score']:.1f}</td>"
+                f"<td>{row['avg_ergonomic']:.1f}</td>"
+                f"<td class='highlight'>{row['bad_count']}</td></tr>"
+            )
+
+        # Forecast blok
+        forecast_html = "<p>Ma'lumot yetarli emas (kamida 2 kunlik tarix kerak).</p>"
+        if forecast:
+            cat_color = "#27ae60" if forecast.category == "low" else "#e67e22" if forecast.category == "moderate" else "#e74c3c"
+            forecast_html = f"""
+            <table>
+                <tr><th>Hozirgi xavf darajasi</th><td><b style="color:{cat_color};">{forecast.current_risk:.0f}/100 ({forecast.category})</b></td></tr>
+                <tr><th>7 kunlik prognoz</th><td>{forecast.projected_risk_7d:.0f}/100 (80% CI: {forecast.confidence_lower:.0f}–{forecast.confidence_upper:.0f})</td></tr>
+                <tr><th>Kunlik trend</th><td>{forecast.slope_per_day:+.2f} /kun</td></tr>
+                <tr><th>30 kunlik og'riq ehtimoli</th><td><b style="color:{cat_color};">{forecast.pain_probability_30d * 100:.0f}%</b></td></tr>
+                <tr><th>Model aniqligi</th><td>R²={forecast.r_squared:.3f} | MAPE={forecast.mape:.1f}%</td></tr>
+                <tr><th>Model</th><td>{forecast.model_used}</td></tr>
+            </table>
+            <p><b>Tavsiya:</b> {forecast.recommendation}</p>
+            """
+
+        # Mashqlar blok
+        exercises_html = ""
+        if exercises:
+            exercises_html = "<h2>Tavsiya Etilgan Mashqlar</h2><ol>"
+            for ex in exercises:
+                exercises_html += (
+                    f"<li><b>{ex.name}</b> ({ex.duration_sec} sek) — {ex.target}<br>"
+                    f"<span style='color:#555;'>{ex.description}</span><br>"
+                    f"<span style='color:#2980b9;'>Foyda: {ex.benefit}</span></li><br>"
+                )
+            exercises_html += "</ol>"
+
+        # Ko'p uchraydigan muammolar
+        issues_html = ""
+        if frequent:
+            issues_html = "<h2>Ko'p Uchraydigan Muammolar</h2><table>"
+            issues_html += "<tr><th>Muammo</th><th>Soni</th></tr>"
+            for issue, count in frequent[:5]:
+                issues_html += f"<tr><td>{issue}</td><td>{count}</td></tr>"
+            issues_html += "</table>"
 
         html = f"""
         <html>
@@ -476,29 +577,50 @@ class DashboardPage(QWidget):
                 h1 {{ color: #2c3e50; text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; }}
                 h2 {{ color: #2980b9; margin-top: 20px; }}
                 table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-                th, td {{ border: 1px solid #bdc3c7; padding: 12px; text-align: left; }}
+                th, td {{ border: 1px solid #bdc3c7; padding: 10px; text-align: left; }}
                 th {{ background-color: #ecf0f1; width: 40%; }}
                 .highlight {{ font-weight: bold; color: #e74c3c; }}
                 .good {{ color: #27ae60; font-weight: bold; }}
+                .section {{ page-break-inside: avoid; }}
             </style>
         </head>
         <body>
             <h1>PostureAI Ergonomik Hisobot</h1>
             <p style="text-align: right;">Sana: <b>{today}</b></p>
-            
+
+            <div class="section">
             <h2>Bugungi Statistika</h2>
             <table>
-                <tr><th>O'rtacha Ball</th><td><b style="font-size: 18px;">{avg_ergo_str.replace("O'rtacha: ", "")} / 100</b></td></tr>
-                <tr><th>To'g'ri Holat</th><td class="good">{good_pct_str.replace("To'g'ri: ", "")}</td></tr>
-                <tr><th>Noto'g'ri Holat</th><td class="highlight">{bad_pct_str.replace("Noto'g'ri: ", "")}</td></tr>
-                <tr><th>Ogohlantirishlar soni</th><td>{alerts_str.replace("Ogohlantirishlar: ", "")} ta</td></tr>
+                <tr><th>O'rtacha Ergonomik Ball</th><td><b style="font-size: 16px;">{stats['avg_ergonomic']} / 100</b></td></tr>
+                <tr><th>O'rtacha Posture Ball</th><td>{stats['avg_score']} / 100</td></tr>
+                <tr><th>To'g'ri Holat</th><td class="good">{stats['good_pct']}%</td></tr>
+                <tr><th>Noto'g'ri Holat</th><td class="highlight">{stats['bad_pct']}%</td></tr>
+                <tr><th>Ogohlantirishlar</th><td>{stats['alerts_count']} ta</td></tr>
+                <tr><th>Jami namunalar</th><td>{stats['total_samples']}</td></tr>
+                <tr><th>Max uzluksiz o'tirish</th><td>{stats['max_sit_seconds'] / 60.0:.1f} daqiqa</td></tr>
             </table>
-            
+            </div>
+
+            <div class="section">
             <h2>Haftalik Trend</h2>
-            <p>Ilova orqali haftalik grafiklarni kuzatishingiz mumkin.</p>
-            
+            <table>
+                <tr><th>Kun</th><th>To'g'ri %</th><th>Posture</th><th>Ergonomik</th><th>Xatolar</th></tr>
+                {weekly_rows if weekly_rows else "<tr><td colspan='5'>Ma'lumot yo'q</td></tr>"}
+            </table>
+            </div>
+
+            <div class="section">
+            <h2>Prediktiv Prognoz (Ensemble ML)</h2>
+            {forecast_html}
+            </div>
+
+            {issues_html}
+            {exercises_html}
+
             <br><hr>
-            <p style="text-align: center; color: #7f8c8d; font-size: 12px;">PostureAI tomonidan avtomatik generatsiya qilindi.</p>
+            <p style="text-align: center; color: #7f8c8d; font-size: 11px;">
+                PostureAI v2.0 — AI HEALTH 2026 | Ensemble Model: Linear + Holt Exp.Smoothing + WMA
+            </p>
         </body>
         </html>
         """
@@ -509,11 +631,12 @@ class DashboardPage(QWidget):
         printer = QPrinter(QPrinter.PrinterMode.HighResolution)
         printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
         printer.setOutputFileName(file_path)
-        printer.setPageMargins(15, 15, 15, 15, QPrinter.Unit.Millimeter)
+        from PySide6.QtCore import QMarginsF
+        printer.setPageMargins(QMarginsF(15, 15, 15, 15))
 
         document.print_(printer)
 
-        QMessageBox.information(self, "Muvaffaqiyatli", f"Hisobot PDF formatida saqlandi:\\n{file_path}")
+        QMessageBox.information(self, "Muvaffaqiyatli", f"Hisobot PDF formatida saqlandi:\n{file_path}")
 
     def refresh_today_stats(self):
         stats = self.storage.get_today_stats()
@@ -574,8 +697,10 @@ class DashboardPage(QWidget):
                 f"<span style='color:{color}; font-size:20px; font-weight:bold;'>"
                 f"30 kunlik Og'riq Ehtimoli: {forecast.pain_probability_30d * 100:.0f}%</span><br><br>"
                 f"Hozirgi xavf: <b>{forecast.current_risk:.0f}</b>/100 &nbsp;|&nbsp; "
-                f"7 kunlik prognoz: <b>{forecast.projected_risk_7d:.0f}</b>/100<br>"
-                f"Trend: <b>{forecast.slope_per_day:+.2f}</b> /kun<br><br>"
+                f"7 kunlik prognoz: <b>{forecast.projected_risk_7d:.0f}</b>/100 "
+                f"<span style='color:#a0aabf;'>({forecast.confidence_lower:.0f}–{forecast.confidence_upper:.0f} CI)</span><br>"
+                f"Trend: <b>{forecast.slope_per_day:+.2f}</b> /kun &nbsp;|&nbsp; "
+                f"R²={forecast.r_squared:.2f} &nbsp;|&nbsp; MAPE={forecast.mape:.1f}%<br><br>"
                 f"<span style='color:#7b61ff; font-weight:bold;'>Tavsiya:</span><br>"
                 f"{forecast.recommendation}"
             )

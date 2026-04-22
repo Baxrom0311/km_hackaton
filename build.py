@@ -27,6 +27,8 @@ def build():
         "--hidden-import=posture_ai.core.filter",
         "--hidden-import=posture_ai.core.ergonomics",
         "--hidden-import=posture_ai.vision",
+        "--hidden-import=posture_ai.vision.metrics",
+        "--hidden-import=posture_ai.vision.scoring",
         "--hidden-import=posture_ai.vision.detector",
         "--hidden-import=posture_ai.vision.camera_worker",
         "--hidden-import=posture_ai.gui",

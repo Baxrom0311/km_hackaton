@@ -169,7 +169,12 @@ class Storage:
         good_pct = round((100.0 * good_count / total), 1) if total else 0.0
         bad_pct = round((100.0 * bad_count / total), 1) if total else 0.0
         avg_score = round(float(row["avg_score"] or 0.0), 1)
-        avg_ergonomic = round(float(row["avg_ergonomic"] or 0.0), 1)
+        avg_ergonomic_raw = row["avg_ergonomic"]
+        avg_ergonomic = (
+            round(float(avg_ergonomic_raw), 1)
+            if avg_ergonomic_raw is not None
+            else avg_score
+        )
         max_sit_seconds = float(row["max_sit_seconds"] or 0.0)
 
         return {
@@ -227,14 +232,21 @@ class Storage:
         for row in rows:
             total = int(row["total"] or 0)
             good_count = int(row["good_count"] or 0)
+            avg_score = round(float(row["avg_score"] or 0.0), 1)
+            avg_ergonomic_raw = row["avg_ergonomic"]
+            avg_ergonomic = (
+                round(float(avg_ergonomic_raw), 1)
+                if avg_ergonomic_raw is not None
+                else avg_score
+            )
             summary.append(
                 {
                     "day": row["day"],
                     "total": total,
                     "good_pct": round((100.0 * good_count / total), 1) if total else 0.0,
                     "bad_count": int(row["bad_count"] or 0),
-                    "avg_score": round(float(row["avg_score"] or 0.0), 1),
-                    "avg_ergonomic": round(float(row["avg_ergonomic"] or 0.0), 1),
+                    "avg_score": avg_score,
+                    "avg_ergonomic": avg_ergonomic,
                 }
             )
         return summary

@@ -58,6 +58,8 @@ class DetectorTests(unittest.TestCase):
         self.assertIsNotNone(result.roll_xy_deg)
         self.assertIsNotNone(result.yaw_xz_deg)
         self.assertIsNotNone(result.pitch_yz_deg)
+        self.assertIsNotNone(result.spine_score)
+        self.assertGreaterEqual(result.spine_score or 0, 70)
 
     def test_analyze_posture_flags_multiple_issues(self) -> None:
         landmarks = build_landmarks()
@@ -111,6 +113,18 @@ class DetectorTests(unittest.TestCase):
         self.assertEqual(result.status, "bad")
         self.assertIn("Bo'yningizni to'g'rilang!", result.issues)
         self.assertIn("Boshingiz qiyshaygan!", result.issues)
+
+    def test_analyze_posture_flags_shoulder_elevation(self) -> None:
+        landmarks = build_landmarks()
+        landmarks[11].y = 0.31
+        landmarks[12].y = 0.31
+
+        result = analyze_posture(landmarks)
+
+        self.assertEqual(result.status, "bad")
+        self.assertIn("Yelkangizni bo'shashtiring!", result.issues)
+        self.assertIsNotNone(result.shoulder_elevation)
+        self.assertGreater(result.shoulder_elevation or 0.0, 0.75)
 
     def test_camera_roll_is_compensated_before_head_tilt_detection(self) -> None:
         landmarks = build_landmarks()

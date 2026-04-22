@@ -20,8 +20,12 @@ from posture_ai.vision.detector import REQUIRED_LANDMARKS, PoseDetector, Posture
 from posture_ai.os_utils.dimmer import ScreenDimmer
 from posture_ai.core.ergonomics import (
     EyeGazeTracker,
+    FatigueSignalTracker,
     SitDurationTracker,
     compute_ergonomic_score,
+    compute_fatigue_score,
+    fatigue_advice,
+    fatigue_level,
 )
 from posture_ai.core.filter import TemporalFilter
 from posture_ai.os_utils.notifier import send_notification
@@ -229,6 +233,7 @@ def run_visual_loop(
         break_duration_seconds=float(config.get("gaze_break_seconds", 20.0)),
         cooldown_sec=float(config.get("gaze_alert_cooldown_seconds", 60.0)),
     )
+    fatigue_signal_tracker = FatigueSignalTracker()
 
     fps_target = max(int(config.get("fps", 10)), 1)
     frame_interval = 1.0 / fps_target
@@ -318,11 +323,41 @@ def run_visual_loop(
                 gaze_tracker.observe(facing_screen=bool(result.facing_camera) if person_present else False)
                 result.sit_seconds = round(sit_tracker.continuous_sit_seconds, 1)
                 if result.posture_score is not None:
+                    fatigue_signals = fatigue_signal_tracker.observe(
+                        posture_score=result.posture_score,
+                        head_angle=result.head_angle,
+                        spine_score=result.spine_score,
+                        shoulder_elevation=result.shoulder_elevation,
+                    )
+                    result.posture_trend_risk = fatigue_signals.posture_trend_risk
+                    result.movement_risk = fatigue_signals.movement_risk
+                    result.head_drop_risk = fatigue_signals.head_drop_risk
+                    result.posture_stability_risk = fatigue_signals.posture_stability_risk
+                    result.fatigue_factors = fatigue_signals.as_factors()
                     result.ergonomic_score = compute_ergonomic_score(
                         result.posture_score,
                         continuous_sit_seconds=result.sit_seconds,
                         face_distance=result.face_distance,
                         continuous_gaze_seconds=gaze_tracker.continuous_gaze_seconds,
+                    )
+                    result.fatigue_score = compute_fatigue_score(
+                        posture_score=result.posture_score,
+                        continuous_sit_seconds=result.sit_seconds,
+                        face_distance=result.face_distance,
+                        continuous_gaze_seconds=gaze_tracker.continuous_gaze_seconds,
+                        posture_trend_risk=fatigue_signals.posture_trend_risk,
+                        movement_risk=fatigue_signals.movement_risk,
+                        head_drop_risk=fatigue_signals.head_drop_risk,
+                        posture_stability_risk=fatigue_signals.posture_stability_risk,
+                        spine_score=result.spine_score,
+                        shoulder_elevation_risk=result.shoulder_elevation or 0.0,
+                    )
+                    result.fatigue_level = fatigue_level(result.fatigue_score)
+                    result.fatigue_advice = fatigue_advice(
+                        fatigue_score=result.fatigue_score,
+                        continuous_sit_seconds=result.sit_seconds,
+                        continuous_gaze_seconds=gaze_tracker.continuous_gaze_seconds,
+                        face_distance=result.face_distance,
                     )
 
                 if landmarks is not None and controls.show_landmarks:

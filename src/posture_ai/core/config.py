@@ -3,6 +3,7 @@ from pydantic import BaseModel, ConfigDict, Field
 import json
 from loguru import logger
 import os
+import sys
 
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -44,6 +45,7 @@ class AppConfig(BaseModel):
     roll_xy_threshold_deg: float = Field(default=12.0, ge=3.0, le=45.0)
     yaw_xz_threshold_deg: float = Field(default=18.0, ge=3.0, le=60.0)
     pitch_yz_threshold_deg: float = Field(default=18.0, ge=3.0, le=60.0)
+    shoulder_elevation_threshold: float = Field(default=0.75, ge=0.2, le=1.0)
 
     model_asset_path: str = "models/pose_landmarker_heavy.task"
 
@@ -71,6 +73,37 @@ def get_config_path() -> Path:
 
 def get_default_db_path() -> Path:
     return get_app_data_dir() / "posture.db"
+
+
+def resolve_model_asset_path(model_asset_path: str | Path) -> Path:
+    """Model faylini CWD, source tree, PyInstaller va installed data'dan izlaydi."""
+    raw_path = Path(model_asset_path).expanduser()
+    if raw_path.is_absolute():
+        return raw_path
+
+    candidates: list[Path] = [Path.cwd() / raw_path]
+
+    frozen_root = getattr(sys, "_MEIPASS", None)
+    if frozen_root:
+        candidates.append(Path(frozen_root) / raw_path)
+
+    package_root = Path(__file__).resolve().parents[1]
+    source_root = Path(__file__).resolve().parents[3]
+    candidates.extend(
+        [
+            source_root / raw_path,
+            package_root / raw_path,
+            Path(sys.executable).resolve().parent / raw_path,
+            Path(sys.prefix) / "share" / "posture-ai" / raw_path,
+            Path(sys.base_prefix) / "share" / "posture-ai" / raw_path,
+        ]
+    )
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
 
 def load_config(path: str | Path | None = None) -> AppConfig:
     conf_path = Path(path) if path else get_config_path()

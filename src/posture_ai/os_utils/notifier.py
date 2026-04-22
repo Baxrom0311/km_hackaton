@@ -16,6 +16,7 @@ ISSUE_MESSAGES = {
     "Bo'yningizni to'g'rilang!": "Bo'yningiz burilgan. Kameraga to'g'ri qarang.",
     "Boshingiz qiyshaygan!": "Boshingiz yon tomonga qiyshaygan. Boshingizni tekis tuting.",
     "Yelkalaringizni oching!": "Yelkalaringiz oldinga bukilgan. Ko'ksingizni oching va orqaga torting.",
+    "Yelkangizni bo'shashtiring!": "Yelkangiz ko'tarilgan. Nafas olib, yelkalarni bo'shashtiring.",
     "Ekrandan juda uzoqsiz!": "Ekrandan juda uzoqda o'tiribsiz. Kameraga yaqinroq keling.",
     "Ekranga juda yaqinsiz!": "Ekranga juda yaqin o'tiribsiz. Biroz uzoqroq o'tiring.",
     "Tanaffus qiling!": "Uzoq vaqt o'tirdingiz. 1-2 daqiqa turing va cho'zilib oling.",

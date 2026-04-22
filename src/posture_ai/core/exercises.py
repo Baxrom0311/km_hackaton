@@ -202,6 +202,7 @@ EXERCISES_DB: dict[str, list[Exercise]] = {
 _ISSUE_TO_GROUP: dict[str, str] = {
     "Boshingizni ko'taring!": "head_tilt",
     "Yelkalaringizni tekislang!": "shoulder_diff",
+    "Yelkangizni bo'shashtiring!": "shoulder_diff",
     "Oldinga engashmang!": "forward_lean",
     "Orqaga yotmang!": "lean_back",
     "Bo'yningizni to'g'rilang!": "neck_rotation",

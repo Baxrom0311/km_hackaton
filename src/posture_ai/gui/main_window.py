@@ -55,7 +55,6 @@ class DashboardWindow(QMainWindow):
 
         # ── Camera Worker ──
         self.worker = CameraWorker(config)
-        self.worker.start()
 
         # ── UI ──
         self.init_ui()
@@ -67,6 +66,7 @@ class DashboardWindow(QMainWindow):
         self.worker.alert_triggered.connect(self.handle_alert)
         self.worker.metrics_updated.connect(self.on_metrics_updated)
         self.worker.camera_error.connect(self.on_camera_error)
+        self.worker.start()
 
         # ── Periodic DB log (har 60 sekund) ──
         self.log_timer = QTimer(self)

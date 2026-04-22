@@ -4,9 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 import json
+import os
 
 from posture_ai.vision.detector import PostureResult
-from posture_ai.core.config import AppConfig, load_config, save_config
+from posture_ai.core.config import AppConfig, load_config, resolve_model_asset_path, save_config
 from posture_ai.database.storage import Storage
 from posture_ai.main import render_stats_report
 
@@ -77,6 +78,18 @@ class MainTests(unittest.TestCase):
 
             self.assertIn("PostureAI Stats", report)
             self.assertIn("Samples: 1 | Alerts: 1", report)
+
+    def test_model_asset_path_resolves_outside_project_cwd(self) -> None:
+        old_cwd = Path.cwd()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.chdir(temp_dir)
+            try:
+                resolved = resolve_model_asset_path("models/pose_landmarker_heavy.task")
+            finally:
+                os.chdir(old_cwd)
+
+        self.assertTrue(resolved.exists())
+        self.assertEqual(resolved.name, "pose_landmarker_heavy.task")
 
 
 if __name__ == "__main__":

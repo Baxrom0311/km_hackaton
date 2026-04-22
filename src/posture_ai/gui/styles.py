@@ -175,6 +175,32 @@ QPushButton#CalibrationButton {
     padding: 12px 28px;
 }
 
+/* Scroll area */
+QScrollArea {
+    border: none;
+    background: transparent;
+}
+
+QScrollBar:vertical {
+    background-color: #0a0f1e;
+    width: 8px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: rgba(123, 97, 255, 0.4);
+    border-radius: 4px;
+    min-height: 30px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: rgba(123, 97, 255, 0.7);
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
 QProgressBar {
     background-color: #1a0533;
     border: 1px solid rgba(123, 97, 255, 0.3);
