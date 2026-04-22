@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QWidgetAction,
 )
 from PySide6.QtGui import QIcon, QAction, QFont
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QParallelAnimationGroup, QEasingCurve
 
 from posture_ai.core.config import AppConfig
 from posture_ai.database.storage import Storage
@@ -25,6 +25,7 @@ from posture_ai.os_utils.notifier import send_notification
 from posture_ai.os_utils.dimmer import ScreenDimmer
 from posture_ai.os_utils.audio_helper import play_alert_for_issue
 from posture_ai.gui.styles import MAIN_STYLESHEET
+from posture_ai.gui.pages.camera import CameraPage
 from posture_ai.gui.pages.dashboard import DashboardPage
 from posture_ai.gui.pages.calibration import CalibrationPage
 from posture_ai.gui.pages.settings import SettingsPage
@@ -33,6 +34,9 @@ from posture_ai.gui.tray_icons import get_tray_icon
 
 class DashboardWindow(QMainWindow):
     """Asosiy ilova oynasi + System Tray boshqaruvchisi."""
+
+    SIDEBAR_EXPANDED_WIDTH = 240
+    SIDEBAR_COLLAPSED_WIDTH = 76
 
     def __init__(self, config: AppConfig, storage: Storage, start_minimized: bool = False):
         super().__init__()
@@ -43,6 +47,8 @@ class DashboardWindow(QMainWindow):
         self._monitoring_active = True
         self._is_quitting = False
         self._cleanup_done = False
+        self._sidebar_collapsed = False
+        self._sidebar_animation: QParallelAnimationGroup | None = None
 
         self.setWindowTitle("PostureAI - AI HEALTH")
         self.resize(1000, 700)
@@ -61,8 +67,9 @@ class DashboardWindow(QMainWindow):
         self.init_tray()
 
         # ── Worker → UI signal connections ──
+        self.worker.metrics_updated.connect(self.page_camera.update_metrics)
         self.worker.metrics_updated.connect(self.page_dashboard.update_metrics)
-        self.worker.frame_processed.connect(self.page_dashboard.update_frame)
+        self.worker.frame_processed.connect(self.page_camera.update_frame)
         self.worker.alert_triggered.connect(self.handle_alert)
         self.worker.metrics_updated.connect(self.on_metrics_updated)
         self.worker.camera_error.connect(self.on_camera_error)
@@ -78,6 +85,8 @@ class DashboardWindow(QMainWindow):
         self.tray_refresh_timer.timeout.connect(self.refresh_tray_menu)
         self.tray_refresh_timer.start(5000)
 
+        self._sync_live_preview_mode()
+
     # ══════════════════════════════════════════════════════
     # UI Setup
     # ══════════════════════════════════════════════════════
@@ -90,66 +99,148 @@ class DashboardWindow(QMainWindow):
         main_layout.setSpacing(0)
 
         # Sidebar
-        sidebar = QFrame()
-        sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(240)
-        sidebar_layout = QVBoxLayout(sidebar)
+        self.sidebar = QFrame()
+        self.sidebar.setObjectName("Sidebar")
+        self.sidebar.setProperty("collapsed", False)
+        self.sidebar.setFixedWidth(self.SIDEBAR_EXPANDED_WIDTH)
+        sidebar_layout = QVBoxLayout(self.sidebar)
         sidebar_layout.setContentsMargins(0, 40, 0, 0)
 
-        logo_label = QLabel("PostureAI")
-        logo_label.setStyleSheet(
-            "color: #00f5d4; font-size: 28px; font-weight: bold; "
-            "margin-left: 20px; margin-bottom: 30px;"
-        )
-        sidebar_layout.addWidget(logo_label)
+        self.sidebar_header_layout = QHBoxLayout()
+        self.sidebar_header_layout.setContentsMargins(20, 0, 14, 24)
+        self.sidebar_header_layout.setSpacing(8)
 
-        self.btn_dash = QPushButton("  Asosiy Dashboard")
+        self.logo_label = QLabel("PostureAI")
+        self.logo_label.setObjectName("SidebarLogo")
+        self.sidebar_header_layout.addWidget(self.logo_label, stretch=1)
+
+        self.btn_sidebar_toggle = QPushButton("☰")
+        self.btn_sidebar_toggle.setObjectName("SidebarToggle")
+        self.btn_sidebar_toggle.setFixedSize(42, 42)
+        self.btn_sidebar_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_sidebar_toggle.setToolTip("Sidebarni yopish")
+        self.btn_sidebar_toggle.clicked.connect(self.toggle_sidebar)
+        self.sidebar_header_layout.addWidget(self.btn_sidebar_toggle)
+        sidebar_layout.addLayout(self.sidebar_header_layout)
+
+        self.btn_camera = QPushButton("◉  Kamera")
+        self.btn_camera.setObjectName("NavButton")
+        self.btn_camera.setCheckable(True)
+        self.btn_camera.setChecked(True)
+
+        self.btn_dash = QPushButton("▦  Analiz")
+        self.btn_dash.setObjectName("NavButton")
         self.btn_dash.setCheckable(True)
-        self.btn_dash.setChecked(True)
 
-        self.btn_calib = QPushButton("  Kalibrovka")
+        self.btn_calib = QPushButton("◎  Kalibrovka")
+        self.btn_calib.setObjectName("NavButton")
         self.btn_calib.setCheckable(True)
 
-        self.btn_set = QPushButton("  Sozlamalar")
+        self.btn_set = QPushButton("⚙  Sozlamalar")
+        self.btn_set.setObjectName("NavButton")
         self.btn_set.setCheckable(True)
 
-        self.btn_dash.clicked.connect(lambda: self.switch_page(0))
-        self.btn_calib.clicked.connect(lambda: self.switch_page(1))
-        self.btn_set.clicked.connect(lambda: self.switch_page(2))
+        self._nav_buttons = [
+            (self.btn_camera, "◉  Kamera", "◉", "Kamera"),
+            (self.btn_dash, "▦  Analiz", "▦", "Analiz"),
+            (self.btn_calib, "◎  Kalibrovka", "◎", "Kalibrovka"),
+            (self.btn_set, "⚙  Sozlamalar", "⚙", "Sozlamalar"),
+        ]
+        for button, _expanded_text, _collapsed_text, tooltip in self._nav_buttons:
+            button.setMinimumHeight(52)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setToolTip(tooltip)
 
+        self.btn_camera.clicked.connect(lambda: self.switch_page(0))
+        self.btn_dash.clicked.connect(lambda: self.switch_page(1))
+        self.btn_calib.clicked.connect(lambda: self.switch_page(2))
+        self.btn_set.clicked.connect(lambda: self.switch_page(3))
+
+        sidebar_layout.addWidget(self.btn_camera)
         sidebar_layout.addWidget(self.btn_dash)
         sidebar_layout.addWidget(self.btn_calib)
         sidebar_layout.addWidget(self.btn_set)
         sidebar_layout.addStretch()
 
-        lbl_version = QLabel("v2.0 — AI HEALTH 2026")
-        lbl_version.setStyleSheet("color: #7b61ff; padding: 20px; font-size: 12px;")
-        sidebar_layout.addWidget(lbl_version)
+        self.lbl_version = QLabel("v2.0 — AI HEALTH 2026")
+        self.lbl_version.setObjectName("SidebarVersion")
+        self.lbl_version.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        sidebar_layout.addWidget(self.lbl_version)
 
         # Stacked pages
         self.stacked_widget = QStackedWidget()
 
-        self.page_dashboard = DashboardPage(
-            self.storage,
-            max_preview_fps=getattr(self.config, "preview_fps", 15),
-        )
+        self.page_camera = CameraPage(max_preview_fps=getattr(self.config, "preview_fps", 15))
+        self.page_dashboard = DashboardPage(self.storage)
         self.page_calib = CalibrationPage(self.config, self.worker)
         self.page_set = SettingsPage(self.config)
 
+        self.stacked_widget.addWidget(self.page_camera)
         self.stacked_widget.addWidget(self.page_dashboard)
         self.stacked_widget.addWidget(self.page_calib)
         self.stacked_widget.addWidget(self.page_set)
 
-        main_layout.addWidget(sidebar)
+        main_layout.addWidget(self.sidebar)
         main_layout.addWidget(self.stacked_widget)
 
+    def toggle_sidebar(self):
+        self.set_sidebar_collapsed(not self._sidebar_collapsed)
+
+    def set_sidebar_collapsed(self, collapsed: bool) -> None:
+        self._sidebar_collapsed = collapsed
+        target_width = self.SIDEBAR_COLLAPSED_WIDTH if collapsed else self.SIDEBAR_EXPANDED_WIDTH
+        current_width = self.sidebar.width()
+
+        self.sidebar.setProperty("collapsed", collapsed)
+        self.sidebar.style().unpolish(self.sidebar)
+        self.sidebar.style().polish(self.sidebar)
+
+        self.logo_label.setVisible(not collapsed)
+        self.logo_label.setText("PostureAI")
+        if collapsed:
+            self.sidebar_header_layout.setContentsMargins(17, 0, 17, 24)
+            self.sidebar_header_layout.setSpacing(0)
+        else:
+            self.sidebar_header_layout.setContentsMargins(20, 0, 14, 24)
+            self.sidebar_header_layout.setSpacing(8)
+        self.lbl_version.setText("v2.0" if collapsed else "v2.0 — AI HEALTH 2026")
+        self.lbl_version.setAlignment(Qt.AlignmentFlag.AlignCenter if collapsed else Qt.AlignmentFlag.AlignLeft)
+        self.btn_sidebar_toggle.setText("»" if collapsed else "☰")
+        self.btn_sidebar_toggle.setToolTip("Sidebarni ochish" if collapsed else "Sidebarni yopish")
+
+        for button, expanded_text, collapsed_text, _tooltip in self._nav_buttons:
+            button.setText(collapsed_text if collapsed else expanded_text)
+
+        if self._sidebar_animation is not None and self._sidebar_animation.state():
+            self._sidebar_animation.stop()
+
+        group = QParallelAnimationGroup(self)
+        for prop_name in (b"minimumWidth", b"maximumWidth"):
+            animation = QPropertyAnimation(self.sidebar, prop_name, group)
+            animation.setDuration(180)
+            animation.setStartValue(current_width)
+            animation.setEndValue(target_width)
+            animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
+            group.addAnimation(animation)
+        group.finished.connect(lambda: self.sidebar.setFixedWidth(target_width))
+        self._sidebar_animation = group
+        group.start()
+
     def switch_page(self, index):
-        self.btn_dash.setChecked(index == 0)
-        self.btn_calib.setChecked(index == 1)
-        self.btn_set.setChecked(index == 2)
+        self.btn_camera.setChecked(index == 0)
+        self.btn_dash.setChecked(index == 1)
+        self.btn_calib.setChecked(index == 2)
+        self.btn_set.setChecked(index == 3)
         self.stacked_widget.setCurrentIndex(index)
-        if index == 0:
+        self._sync_live_preview_mode()
+        if index == 1:
             self.page_dashboard.update_forecast()
+
+    def _sync_live_preview_mode(self) -> None:
+        if getattr(self, "worker", None) is None:
+            return
+        is_camera_page_visible = self.isVisible() and self.stacked_widget.currentIndex() == 0
+        self.worker.set_live_preview_mode(is_camera_page_visible)
 
     # ══════════════════════════════════════════════════════
     # System Tray (Tailscale-style)
@@ -226,9 +317,17 @@ class DashboardWindow(QMainWindow):
         menu.addSeparator()
 
         # ── Harakatlar ──
-        dashboard_action = QAction("Dashboard ochish", self)
+        dashboard_action = QAction("Ilovani ochish", self)
         dashboard_action.triggered.connect(self.toggle_dashboard)
         menu.addAction(dashboard_action)
+
+        camera_action = QAction("Kamera sahifasi", self)
+        camera_action.triggered.connect(lambda _checked=False: self.open_page_from_tray(0))
+        menu.addAction(camera_action)
+
+        analysis_action = QAction("Analiz sahifasi", self)
+        analysis_action.triggered.connect(lambda _checked=False: self.open_page_from_tray(1))
+        menu.addAction(analysis_action)
 
         # Monitoring toggle
         if self._monitoring_active:
@@ -273,11 +372,18 @@ class DashboardWindow(QMainWindow):
         """Dashboard oynasini ochish yoki yopish."""
         if self.isVisible():
             self.hide()
+            self._sync_live_preview_mode()
         else:
             self.showNormal()
             self.activateWindow()
             self.raise_()
             self.switch_page(0)
+
+    def open_page_from_tray(self, index: int):
+        self.showNormal()
+        self.activateWindow()
+        self.raise_()
+        self.switch_page(index)
 
     # ══════════════════════════════════════════════════════
     # Monitoring Control
@@ -298,11 +404,13 @@ class DashboardWindow(QMainWindow):
 
         self._monitoring_active = True
         self.worker = CameraWorker(self.config)
+        self.worker.metrics_updated.connect(self.page_camera.update_metrics)
         self.worker.metrics_updated.connect(self.page_dashboard.update_metrics)
-        self.worker.frame_processed.connect(self.page_dashboard.update_frame)
+        self.worker.frame_processed.connect(self.page_camera.update_frame)
         self.worker.alert_triggered.connect(self.handle_alert)
         self.worker.metrics_updated.connect(self.on_metrics_updated)
         self.worker.camera_error.connect(self.on_camera_error)
+        self._sync_live_preview_mode()
         self.worker.start()
         # Kalibrovka sahifasiga yangi worker'ni berish
         self.page_calib.worker = self.worker
@@ -325,7 +433,7 @@ class DashboardWindow(QMainWindow):
             QSystemTrayIcon.MessageIcon.Critical,
             5000,
         )
-        self.page_dashboard.lbl_camera.setText(
+        self.page_camera.set_camera_error(
             "Kamera topilmadi.\nSozlamalardan kamera indeksini tekshiring\n"
             "yoki kamerani ulang va monitoringni qayta yoqing."
         )
@@ -420,6 +528,7 @@ class DashboardWindow(QMainWindow):
     def showEvent(self, event):
         """Oyna ochilganda forecast yangilash."""
         super().showEvent(event)
+        self._sync_live_preview_mode()
         self.page_dashboard.update_forecast()
 
     def closeEvent(self, event):
@@ -429,6 +538,7 @@ class DashboardWindow(QMainWindow):
             return
         event.ignore()
         self.hide()
+        self._sync_live_preview_mode()
         if not self._start_minimized:
             # Faqat birinchi marta ko'rsatish
             self.tray_icon.showMessage(

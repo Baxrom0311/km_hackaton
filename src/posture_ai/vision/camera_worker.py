@@ -18,6 +18,14 @@ from posture_ai.core.ergonomics import (
 from posture_ai.core.config import AppConfig
 
 
+_POSE_CONNECTIONS = (
+    (11, 12), (11, 13), (13, 15), (12, 14), (14, 16),
+    (11, 23), (12, 24), (23, 24),
+    (23, 25), (25, 27), (24, 26), (26, 28),
+    (0, 7), (0, 8), (7, 8),
+)
+
+
 class CameraWorker(QThread):
     """Kamera bilan ishlaydigan background thread.
 
@@ -42,12 +50,15 @@ class CameraWorker(QThread):
     MOTION_THRESHOLD = 5.0       # pixel farq threshold
     STATIC_RECHECK_INTERVAL = 1.5
     SLOW_AI_LOG_INTERVAL = 5.0
+    OVERLAY_STALE_SECONDS = 2.5
+    LIVE_PREVIEW_MAX_AI_FPS = 10.0
 
     def __init__(self, config: AppConfig, parent=None):
         super().__init__(parent)
         self.config = config
         self._is_running = True
         self._force_ai_sampling = False
+        self._live_preview_mode = True
         self.detector = PoseDetector(config.model_dump())
 
         self.temporal_filter = TemporalFilter(
@@ -68,6 +79,9 @@ class CameraWorker(QThread):
             cooldown_sec=config.fatigue_alert_cooldown_seconds,
         )
         self.fatigue_signal_tracker = FatigueSignalTracker()
+        self._last_result: PostureResult | None = None
+        self._last_landmarks = None
+        self._last_landmarks_at = float("-inf")
 
     def _handle_result(self, result: PostureResult, motion_level: float | None = None) -> None:
         person_present = not result.skipped and result.posture_score is not None
@@ -157,12 +171,78 @@ class CameraWorker(QThread):
                 )
             )
 
+    @staticmethod
+    def _draw_landmark_overlay(frame, landmarks, result: PostureResult):
+        overlay = frame.copy()
+        height, width = overlay.shape[:2]
+        border_color = (45, 220, 170) if result.status == "good" else (64, 64, 230)
+        if result.skipped:
+            border_color = (180, 180, 180)
+
+        if landmarks is not None:
+            points: list[tuple[int, int]] = []
+            visible: list[bool] = []
+            for landmark in landmarks:
+                x = int(landmark.x * width)
+                y = int(landmark.y * height)
+                points.append((x, y))
+                visible.append(getattr(landmark, "visibility", 1.0) >= 0.35)
+
+            for a_idx, b_idx in _POSE_CONNECTIONS:
+                if a_idx < len(points) and b_idx < len(points) and visible[a_idx] and visible[b_idx]:
+                    cv2.line(overlay, points[a_idx], points[b_idx], (190, 190, 210), 2, cv2.LINE_AA)
+
+            for idx, (x, y) in enumerate(points):
+                if idx < len(visible) and visible[idx]:
+                    cv2.circle(overlay, (x, y), 4, (0, 245, 212), -1, cv2.LINE_AA)
+                    cv2.circle(overlay, (x, y), 7, (0, 245, 212), 1, cv2.LINE_AA)
+
+        cv2.rectangle(overlay, (0, 0), (width - 1, height - 1), border_color, 5)
+        score = result.ergonomic_score if result.ergonomic_score is not None else result.posture_score
+        status_text = result.status.upper() if not result.skipped else (result.reason or "SEARCHING").upper()
+        label = f"{status_text} | score {score if score is not None else '--'}"
+        cv2.rectangle(overlay, (0, 0), (min(width, 360), 42), (5, 7, 14), -1)
+        cv2.putText(
+            overlay,
+            label,
+            (14, 28),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.72,
+            border_color,
+            2,
+            cv2.LINE_AA,
+        )
+        return overlay
+
+    def _process_ai_frame(self, frame, motion_level: float | None):
+        landmarks = self.detector.extract_landmarks(frame)
+        if landmarks is None:
+            result = PostureResult(status="unknown", skipped=True, reason="no_pose")
+        else:
+            result = self.detector.analyze_landmarks(landmarks)
+
+        self._handle_result(result, motion_level=motion_level)
+        self._last_landmarks = landmarks
+        self._last_landmarks_at = time.monotonic()
+        return self._draw_landmark_overlay(frame, landmarks, result)
+
+    def _compose_preview_frame(self, frame, now: float):
+        if self._last_result is None:
+            return frame.copy()
+        if (now - self._last_landmarks_at) > self.OVERLAY_STALE_SECONDS:
+            return frame.copy()
+        return self._draw_landmark_overlay(frame, self._last_landmarks, self._last_result)
+
     def stop(self):
         self._is_running = False
 
     def set_force_ai_sampling(self, enabled: bool) -> None:
         """Kalibrovka kabi holatlarda motion skip'ni vaqtincha o'chiradi."""
         self._force_ai_sampling = enabled
+
+    def set_live_preview_mode(self, enabled: bool) -> None:
+        """Kamera sahifasi ochiq bo'lsa landmarklarni tezroq yangilash."""
+        self._live_preview_mode = enabled
 
     def _reconnect_camera(self) -> bool:
         logger.info("Kamera qayta ulanmoqda...")
@@ -199,10 +279,16 @@ class CameraWorker(QThread):
         fps = max(self.config.fps, 1)
         frame_interval = 1.0 / fps
         ai_skip = max(1, getattr(self.config, "ai_skip_frames", 2))
-        ai_min_interval = max(ai_skip / fps, 0.25)
         preview_fps = max(1, min(getattr(self.config, "preview_fps", 15), fps))
         preview_interval = 1.0 / preview_fps
+        base_ai_interval = max(ai_skip / fps, 0.25)
+        live_preview_ai_interval = min(
+            base_ai_interval,
+            1.0 / min(preview_fps, self.LIVE_PREVIEW_MAX_AI_FPS),
+        )
         self._last_result = None
+        self._last_landmarks = None
+        self._last_landmarks_at = float("-inf")
 
         try:
             self.detector.open()
@@ -213,7 +299,9 @@ class CameraWorker(QThread):
 
         logger.info(
             "CameraWorker bashlandi "
-            f"(fps={fps}, preview_fps={preview_fps}, ai_interval={ai_min_interval:.2f}s, motion_detect=ON)"
+            f"(fps={fps}, preview_fps={preview_fps}, "
+            f"ai_interval={base_ai_interval:.2f}s, live_ai_interval={live_preview_ai_interval:.2f}s, "
+            "motion_detect=ON)"
         )
 
         consecutive_fails = 0
@@ -246,6 +334,8 @@ class CameraWorker(QThread):
                         consecutive_fails = 0
                         last_reconnect = time.monotonic()
                         prev_gray = None
+                        self._last_landmarks = None
+                        self._last_landmarks_at = float("-inf")
                     else:
                         self.camera_error.emit("Kamera javob bermayapti")
                         break
@@ -255,11 +345,7 @@ class CameraWorker(QThread):
             consecutive_fails = 0
             frame = cv2.flip(frame, 1)
 
-            # Live preview AI'dan oldin yuboriladi, shunda inferensiya sekinlashsa ham UI qotmaydi.
             now = time.monotonic()
-            if (now - last_preview_emit_at) >= preview_interval:
-                self.frame_processed.emit(frame.copy())
-                last_preview_emit_at = now
 
             # ══════ MOTION DETECTION (arzon — CPU ~0.1%) ══════
             curr_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -270,16 +356,22 @@ class CameraWorker(QThread):
 
             has_motion = motion > self.MOTION_THRESHOLD
             force_ai_sampling = self._force_ai_sampling
+            active_ai_interval = live_preview_ai_interval if self._live_preview_mode else base_ai_interval
 
             if not has_motion and not force_ai_sampling:
                 if (started_at - last_ai_at) >= self.STATIC_RECHECK_INTERVAL:
                     ai_started_at = time.monotonic()
-                    self._handle_result(self.detector.process_frame(frame), motion_level=motion)
+                    overlay_frame = self._process_ai_frame(frame, motion_level=motion)
                     last_ai_at = time.monotonic()
+                    self.frame_processed.emit(overlay_frame)
+                    last_preview_emit_at = last_ai_at
                     ai_elapsed = last_ai_at - ai_started_at
-                    if ai_elapsed > ai_min_interval and (last_ai_at - last_slow_ai_log_at) >= self.SLOW_AI_LOG_INTERVAL:
+                    if ai_elapsed > active_ai_interval and (last_ai_at - last_slow_ai_log_at) >= self.SLOW_AI_LOG_INTERVAL:
                         logger.debug(f"AI inferensiya sekin: {ai_elapsed:.2f}s")
                         last_slow_ai_log_at = last_ai_at
+                elif (started_at - last_preview_emit_at) >= preview_interval:
+                    self.frame_processed.emit(self._compose_preview_frame(frame, started_at))
+                    last_preview_emit_at = started_at
 
                 elapsed = time.monotonic() - started_at
                 remaining = frame_interval - elapsed
@@ -288,16 +380,21 @@ class CameraWorker(QThread):
                 continue
 
             # ══════ HARAKAT BOR YOKI KALIBROVKA — AI ishlaydi ══════
-            run_ai = (started_at - last_ai_at) >= ai_min_interval
+            run_ai = (started_at - last_ai_at) >= active_ai_interval
 
             if run_ai:
                 ai_started_at = time.monotonic()
-                self._handle_result(self.detector.process_frame(frame), motion_level=motion)
+                overlay_frame = self._process_ai_frame(frame, motion_level=motion)
                 last_ai_at = time.monotonic()
+                self.frame_processed.emit(overlay_frame)
+                last_preview_emit_at = last_ai_at
                 ai_elapsed = last_ai_at - ai_started_at
-                if ai_elapsed > ai_min_interval and (last_ai_at - last_slow_ai_log_at) >= self.SLOW_AI_LOG_INTERVAL:
+                if ai_elapsed > active_ai_interval and (last_ai_at - last_slow_ai_log_at) >= self.SLOW_AI_LOG_INTERVAL:
                     logger.debug(f"AI inferensiya sekin: {ai_elapsed:.2f}s")
                     last_slow_ai_log_at = last_ai_at
+            elif (started_at - last_preview_emit_at) >= preview_interval:
+                self.frame_processed.emit(self._compose_preview_frame(frame, started_at))
+                last_preview_emit_at = started_at
 
             elapsed = time.monotonic() - started_at
             remaining = frame_interval - elapsed

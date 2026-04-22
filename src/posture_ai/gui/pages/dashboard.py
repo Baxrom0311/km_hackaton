@@ -1,12 +1,9 @@
-import cv2
-import time
-import numpy as np
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QFrame, QGridLayout, QProgressBar, QScrollArea,
     QPushButton, QFileDialog, QMessageBox
 )
-from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QFont, QTextDocument
+from PySide6.QtGui import QPainter, QPen, QColor, QFont, QTextDocument
 from PySide6.QtCore import Qt, QTimer, QRectF
 import datetime
 
@@ -140,12 +137,9 @@ class CircularGauge(QWidget):
 
 
 class DashboardPage(QWidget):
-    def __init__(self, storage, max_preview_fps: int = 15):
+    def __init__(self, storage):
         super().__init__()
         self.storage = storage
-        self._last_frame_ui_at = 0.0
-        # Worker allaqachon preview FPS'ni throttle qiladi; bu faqat queued signal backlog'ini kesadi.
-        self._frame_ui_interval = 1.0 / (max(1, int(max_preview_fps)) * 1.15)
         self.init_ui()
 
         # Auto-refresh today stats every 30 seconds
@@ -155,39 +149,14 @@ class DashboardPage(QWidget):
         self.refresh_today_stats()
 
     def init_ui(self):
-        main_layout = QHBoxLayout(self)
+        main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(20)
+        main_layout.setSpacing(16)
 
-        # ═══════ LEFT COLUMN: Camera Feed ═══════
-        left_layout = QVBoxLayout()
-
-        lbl_title = QLabel("Jonli Kuzatuv")
+        lbl_title = QLabel("Analiz")
         lbl_title.setProperty("class", "TitleText")
+        main_layout.addWidget(lbl_title)
 
-        self.lbl_camera = QLabel("Kamera qidirilmoqda...")
-        self.lbl_camera.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_camera.setMinimumSize(480, 360)
-        self.lbl_camera.setStyleSheet(
-            "background-color: #05070e; border: 2px solid #1a0533; border-radius: 12px;"
-        )
-
-        # Kamera ostida: joriy holatni ko'rsatuvchi panel
-        self.lbl_live_issues = QLabel("")
-        self.lbl_live_issues.setWordWrap(True)
-        self.lbl_live_issues.setMinimumHeight(50)
-        self.lbl_live_issues.setStyleSheet(
-            "background-color: rgba(0, 245, 212, 0.06); "
-            "border: 1px solid rgba(0, 245, 212, 0.15); border-radius: 8px; "
-            "padding: 10px; font-size: 14px; color: #d0d0d0;"
-        )
-        self.lbl_live_issues.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        left_layout.addWidget(lbl_title)
-        left_layout.addWidget(self.lbl_camera, stretch=1)
-        left_layout.addWidget(self.lbl_live_issues)
-
-        # ═══════ RIGHT COLUMN ═══════
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -356,7 +325,6 @@ class DashboardPage(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
 
-        main_layout.addLayout(left_layout, stretch=2)
         main_layout.addWidget(scroll, stretch=1)
 
     # ── Real-time updates from CameraWorker ──
@@ -424,82 +392,6 @@ class DashboardPage(QWidget):
                 label, color = "Past", "#00f5d4"
             self.card_fatigue.set_value(f"{label} {fatigue_score}")
             self.card_fatigue.lbl_value.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {color};")
-
-        fatigue_factor_labels = {
-            "posture_trend": "trend",
-            "low_movement": "harakat",
-            "head_drop": "bosh",
-            "posture_instability": "barqarorlik",
-            "spine_alignment": "spine",
-            "shoulder_elevation": "yelka",
-        }
-        fatigue_factors = getattr(result, "fatigue_factors", {}) or {}
-        top_factors = [
-            fatigue_factor_labels.get(name, name)
-            for name, value in sorted(fatigue_factors.items(), key=lambda item: item[1], reverse=True)
-            if value >= 0.35
-        ][:3]
-        factor_line = ""
-        if top_factors:
-            factor_line = (
-                "<br><span style='color:#a0aabf;'>Charchoq signallari: "
-                + ", ".join(top_factors)
-                + "</span>"
-            )
-
-        # Live issues paneli
-        if result.skipped:
-            self.lbl_live_issues.setText(
-                "<span style='color:#ff9f43;'>Kamera oldida odam aniqlanmadi. "
-                "Yuzingiz va yelkalaringiz ko'rinsin.</span>"
-            )
-        elif result.issues:
-            issues_html = " &nbsp;|&nbsp; ".join(
-                f"<span style='color:#ff4d4f; font-weight:bold;'>{issue}</span>"
-                for issue in result.issues[:3]
-            )
-            advice = getattr(result, "fatigue_advice", None)
-            advice_line = f"<br><span style='color:#7b61ff;'>{advice}</span>" if advice else ""
-            self.lbl_live_issues.setText(issues_html + advice_line + factor_line)
-        else:
-            self.lbl_live_issues.setText(
-                "<span style='color:#00f5d4; font-weight:bold;'>Holatingiz yaxshi! "
-                "Shu holatni davom ettiring.</span>"
-                + factor_line
-            )
-
-    def update_frame(self, frame):
-        if frame is None:
-            return
-        now = time.monotonic()
-        if (now - self._last_frame_ui_at) < self._frame_ui_interval:
-            return
-        self._last_frame_ui_at = now
-        try:
-            rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            h, w, ch = rgb_image.shape
-
-            # Kamera tasvirini to'liqroq ko'rsatish (crop kamaytirildi)
-            crop_ratio = 0.92
-            crop_h = int(h * crop_ratio)
-            crop_w = int(w * crop_ratio)
-            y_start = (h - crop_h) // 2
-            x_start = (w - crop_w) // 2
-            rgb_image = np.ascontiguousarray(rgb_image[y_start:y_start + crop_h, x_start:x_start + crop_w])
-            h, w, ch = rgb_image.shape
-
-            bytes_per_line = ch * w
-            q_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
-            pixmap = QPixmap.fromImage(q_img)
-            self.lbl_camera.setPixmap(
-                pixmap.scaled(
-                    self.lbl_camera.width(),
-                    self.lbl_camera.height(),
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                )
-            )
-        except Exception:
-            pass
 
     # ── Periodic stats refresh ──
 

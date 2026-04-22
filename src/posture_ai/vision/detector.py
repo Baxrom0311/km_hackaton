@@ -350,11 +350,7 @@ class PoseDetector:
             return None
         return pose_result.pose_landmarks.landmark
 
-    def process_frame(self, frame: Any) -> PostureResult:
-        landmarks = self.extract_landmarks(frame)
-        if landmarks is None:
-            return PostureResult(status="unknown", skipped=True, reason="no_pose")
-
+    def analyze_landmarks(self, landmarks: Sequence[LandmarkLike]) -> PostureResult:
         return analyze_posture(
             landmarks,
             head_angle_threshold=float(self.config["head_angle_threshold"]),
@@ -372,6 +368,13 @@ class PoseDetector:
             baseline_yaw_xz_deg=self.config.get("baseline_yaw_xz_deg"),
             baseline_pitch_yz_deg=self.config.get("baseline_pitch_yz_deg"),
         )
+
+    def process_frame(self, frame: Any) -> PostureResult:
+        landmarks = self.extract_landmarks(frame)
+        if landmarks is None:
+            return PostureResult(status="unknown", skipped=True, reason="no_pose")
+
+        return self.analyze_landmarks(landmarks)
 
 
 def collect_calibration_profile(

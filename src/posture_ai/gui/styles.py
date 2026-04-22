@@ -22,7 +22,35 @@ QWidget {
     border-right: 1px solid rgba(123, 97, 255, 0.3);
 }
 
-#Sidebar QPushButton {
+QLabel#SidebarLogo {
+    color: #00f5d4;
+    font-size: 28px;
+    font-weight: 800;
+}
+
+QLabel#SidebarVersion {
+    color: #7b61ff;
+    padding: 20px;
+    font-size: 12px;
+}
+
+#Sidebar QPushButton#SidebarToggle {
+    background-color: rgba(123, 97, 255, 0.14);
+    color: #00f5d4;
+    font-size: 20px;
+    font-weight: 800;
+    text-align: center;
+    padding: 0;
+    border: 1px solid rgba(0, 245, 212, 0.18);
+    border-radius: 8px;
+}
+
+#Sidebar QPushButton#SidebarToggle:hover {
+    background-color: rgba(0, 245, 212, 0.14);
+    border: 1px solid rgba(0, 245, 212, 0.45);
+}
+
+#Sidebar QPushButton#NavButton {
     background-color: transparent;
     color: #ffffff;
     font-size: 16px;
@@ -33,15 +61,29 @@ QWidget {
     border-left: 4px solid transparent;
 }
 
-#Sidebar QPushButton:hover {
+#Sidebar QPushButton#NavButton:hover {
     background-color: rgba(123, 97, 255, 0.1);
 }
 
-#Sidebar QPushButton:checked {
+#Sidebar QPushButton#NavButton:checked {
     background-color: rgba(0, 245, 212, 0.1);
     color: #00f5d4;
     border-left: 4px solid #00f5d4;
     font-weight: bold;
+}
+
+#Sidebar[collapsed="true"] QLabel#SidebarLogo {
+    font-size: 20px;
+}
+
+#Sidebar[collapsed="true"] QLabel#SidebarVersion {
+    padding: 20px 0;
+}
+
+#Sidebar[collapsed="true"] QPushButton#NavButton {
+    font-size: 22px;
+    text-align: center;
+    padding: 12px 0;
 }
 
 /* Glassmorphism Cards */
