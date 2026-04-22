@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
-import logging
+
 import platform
 import subprocess
 from typing import Sequence
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 ISSUE_MESSAGES = {
     "Boshingizni ko'taring!": "Boshingizni ko'taring! Oldinga engashib ketibsiz.",

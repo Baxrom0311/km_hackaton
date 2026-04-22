@@ -30,7 +30,8 @@ from posture_ai.core.ergonomics import (
 from posture_ai.core.filter import TemporalFilter
 from posture_ai.os_utils.notifier import send_notification
 
-logger = logging.getLogger(__name__)
+from loguru import logger
+
 
 # BlazePose 33 landmark uchun asosiy skelet ulanishlari (chiziqlar)
 _POSE_CONNECTIONS = (

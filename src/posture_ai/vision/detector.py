@@ -10,26 +10,14 @@ Scoring va calibration: vision.scoring
 from __future__ import annotations
 
 import importlib.util
-import logging
+
 import sys
 import time
 from queue import Queue
 from typing import Any, Sequence
 
-from posture_ai.core.ergonomics import (
-    FatigueSignalTracker,
-    EyeGazeTracker,
-    SitDurationTracker,
-    compute_ergonomic_score,
-    compute_fatigue_score,
-    fatigue_advice,
-    fatigue_level,
-    estimate_face_camera_distance,
-    eye_strain_risk,
-    is_facing_camera,
-)
 from posture_ai.core.config import resolve_model_asset_path
-from posture_ai.core.filter import TemporalFilter
+from posture_ai.core.session import SessionProcessor
 from posture_ai.vision.metrics import (
     REQUIRED_LANDMARKS,
     LandmarkLike,
@@ -61,7 +49,7 @@ __all__ = [
     "run_detection_loop",
 ]
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class DependencyUnavailableError(RuntimeError):
@@ -426,24 +414,30 @@ def run_detection_loop(
     stop_event: Any,
     config: dict[str, Any],
 ) -> None:
+    from posture_ai.core.filter import TemporalFilter
+    from posture_ai.core.ergonomics import SitDurationTracker, EyeGazeTracker, FatigueSignalTracker
+
     fps = max(int(config.get("fps", 10)), 1)
     frame_interval = 1.0 / fps
-    temporal_filter = TemporalFilter(
-        window_size=int(config["temporal_window_size"]),
-        threshold=float(config["temporal_threshold"]),
-        cooldown_sec=float(config["cooldown_seconds"]),
+    
+    session = SessionProcessor(
+        temporal_filter=TemporalFilter(
+            window_size=int(config["temporal_window_size"]),
+            threshold=float(config["temporal_threshold"]),
+            cooldown_sec=float(config["cooldown_seconds"]),
+        ),
+        sit_tracker=SitDurationTracker(
+            break_threshold_sec=float(config.get("sit_break_threshold_seconds", 60.0)),
+            alert_threshold_sec=float(config.get("sit_alert_threshold_seconds", 25 * 60.0)),
+            cooldown_sec=float(config.get("sit_alert_cooldown_seconds", 5 * 60.0)),
+        ),
+        gaze_tracker=EyeGazeTracker(
+            gaze_alert_seconds=float(config.get("gaze_alert_seconds", 20 * 60.0)),
+            break_duration_seconds=float(config.get("gaze_break_seconds", 20.0)),
+            cooldown_sec=float(config.get("gaze_alert_cooldown_seconds", 60.0)),
+        ),
+        fatigue_signal_tracker=FatigueSignalTracker(),
     )
-    sit_tracker = SitDurationTracker(
-        break_threshold_sec=float(config.get("sit_break_threshold_seconds", 60.0)),
-        alert_threshold_sec=float(config.get("sit_alert_threshold_seconds", 25 * 60.0)),
-        cooldown_sec=float(config.get("sit_alert_cooldown_seconds", 5 * 60.0)),
-    )
-    gaze_tracker = EyeGazeTracker(
-        gaze_alert_seconds=float(config.get("gaze_alert_seconds", 20 * 60.0)),
-        break_duration_seconds=float(config.get("gaze_break_seconds", 20.0)),
-        cooldown_sec=float(config.get("gaze_alert_cooldown_seconds", 60.0)),
-    )
-    fatigue_signal_tracker = FatigueSignalTracker()
     detector = PoseDetector(config)
 
     try:
@@ -458,78 +452,18 @@ def run_detection_loop(
             ok, frame = detector.read()
             if not ok:
                 logger.warning("Kameradan kadr olib bo'lmadi")
-                sit_tracker.observe(person_present=False)
+                session.sit_tracker.observe(person_present=False)
                 if stop_event.wait(frame_interval):
                     break
                 continue
 
             result = detector.process_frame(frame)
-            person_present = not result.skipped and result.posture_score is not None
-            sit_tracker.observe(person_present=person_present)
-            gaze_tracker.observe(facing_screen=bool(result.facing_camera) if person_present else False)
-
-            result.sit_seconds = round(sit_tracker.continuous_sit_seconds, 1)
-            if result.posture_score is not None:
-                fatigue_signals = fatigue_signal_tracker.observe(
-                    posture_score=result.posture_score,
-                    head_angle=result.head_angle,
-                    spine_score=result.spine_score,
-                    shoulder_elevation=result.shoulder_elevation,
-                )
-                result.posture_trend_risk = fatigue_signals.posture_trend_risk
-                result.movement_risk = fatigue_signals.movement_risk
-                result.head_drop_risk = fatigue_signals.head_drop_risk
-                result.posture_stability_risk = fatigue_signals.posture_stability_risk
-                result.fatigue_factors = fatigue_signals.as_factors()
-                result.ergonomic_score = compute_ergonomic_score(
-                    result.posture_score,
-                    continuous_sit_seconds=result.sit_seconds,
-                    face_distance=result.face_distance,
-                    continuous_gaze_seconds=gaze_tracker.continuous_gaze_seconds,
-                )
-                result.fatigue_score = compute_fatigue_score(
-                    posture_score=result.posture_score,
-                    continuous_sit_seconds=result.sit_seconds,
-                    face_distance=result.face_distance,
-                    continuous_gaze_seconds=gaze_tracker.continuous_gaze_seconds,
-                    posture_trend_risk=fatigue_signals.posture_trend_risk,
-                    movement_risk=fatigue_signals.movement_risk,
-                    head_drop_risk=fatigue_signals.head_drop_risk,
-                    posture_stability_risk=fatigue_signals.posture_stability_risk,
-                    spine_score=result.spine_score,
-                    shoulder_elevation_risk=result.shoulder_elevation or 0.0,
-                )
-                result.fatigue_level = fatigue_level(result.fatigue_score)
-                result.fatigue_advice = fatigue_advice(
-                    fatigue_score=result.fatigue_score,
-                    continuous_sit_seconds=result.sit_seconds,
-                    continuous_gaze_seconds=gaze_tracker.continuous_gaze_seconds,
-                    face_distance=result.face_distance,
-                )
+            alerts = session.process(result)
 
             stats_queue.put(result)
 
-            if not result.skipped and temporal_filter.update(result.status == "bad"):
-                signal_queue.put(result)
-
-            if sit_tracker.needs_break_alert():
-                break_result = PostureResult(
-                    status="bad",
-                    issues=["Tanaffus qiling!"],
-                    sit_seconds=result.sit_seconds,
-                    ergonomic_score=result.ergonomic_score,
-                    break_alert=True,
-                )
-                signal_queue.put(break_result)
-
-            if gaze_tracker.needs_gaze_alert():
-                gaze_result = PostureResult(
-                    status="bad",
-                    issues=["20-20-20!"],
-                    sit_seconds=result.sit_seconds,
-                    ergonomic_score=result.ergonomic_score,
-                )
-                signal_queue.put(gaze_result)
+            for alert_event in alerts:
+                signal_queue.put(alert_event.result)
 
             elapsed = time.monotonic() - started_at
             remaining = frame_interval - elapsed

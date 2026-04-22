@@ -10,11 +10,8 @@ from posture_ai.core.ergonomics import (
     FatigueSignalTracker,
     SitDurationTracker,
     EyeGazeTracker,
-    compute_ergonomic_score,
-    compute_fatigue_score,
-    fatigue_advice,
-    fatigue_level,
 )
+from posture_ai.core.session import SessionProcessor
 from posture_ai.core.config import AppConfig
 
 
@@ -61,115 +58,39 @@ class CameraWorker(QThread):
         self._live_preview_mode = True
         self.detector = PoseDetector(config.model_dump())
 
-        self.temporal_filter = TemporalFilter(
-            window_size=config.temporal_window_size,
-            threshold=config.temporal_threshold,
-            cooldown_sec=config.cooldown_seconds,
+        self.session = SessionProcessor(
+            temporal_filter=TemporalFilter(
+                window_size=config.temporal_window_size,
+                threshold=config.temporal_threshold,
+                cooldown_sec=config.cooldown_seconds,
+            ),
+            sit_tracker=SitDurationTracker(
+                break_threshold_sec=config.sit_break_threshold_seconds,
+                alert_threshold_sec=config.sit_alert_threshold_seconds,
+                cooldown_sec=config.sit_alert_cooldown_seconds,
+            ),
+            gaze_tracker=EyeGazeTracker(
+                gaze_alert_seconds=20 * 60, break_duration_seconds=20, cooldown_sec=60
+            ),
+            fatigue_signal_tracker=FatigueSignalTracker(),
+            fatigue_alert_tracker=FatigueAlertTracker(
+                threshold=config.fatigue_alert_threshold,
+                cooldown_sec=config.fatigue_alert_cooldown_seconds,
+            ),
         )
-        self.sit_tracker = SitDurationTracker(
-            break_threshold_sec=config.sit_break_threshold_seconds,
-            alert_threshold_sec=config.sit_alert_threshold_seconds,
-            cooldown_sec=config.sit_alert_cooldown_seconds,
-        )
-        self.gaze_tracker = EyeGazeTracker(
-            gaze_alert_seconds=20 * 60, break_duration_seconds=20, cooldown_sec=60
-        )
-        self.fatigue_tracker = FatigueAlertTracker(
-            threshold=config.fatigue_alert_threshold,
-            cooldown_sec=config.fatigue_alert_cooldown_seconds,
-        )
-        self.fatigue_signal_tracker = FatigueSignalTracker()
+
         self._last_result: PostureResult | None = None
         self._last_landmarks = None
         self._last_landmarks_at = float("-inf")
 
     def _handle_result(self, result: PostureResult, motion_level: float | None = None) -> None:
-        person_present = not result.skipped and result.posture_score is not None
-        facing_screen = bool(result.facing_camera) if person_present else False
-
-        self.sit_tracker.observe(person_present=person_present)
-        self.gaze_tracker.observe(facing_screen=facing_screen)
-
-        result.sit_seconds = round(self.sit_tracker.continuous_sit_seconds, 1)
-        if result.posture_score is not None:
-            fatigue_signals = self.fatigue_signal_tracker.observe(
-                posture_score=result.posture_score,
-                head_angle=result.head_angle,
-                spine_score=getattr(result, "spine_score", None),
-                shoulder_elevation=getattr(result, "shoulder_elevation", None),
-                motion_level=motion_level,
-            )
-            result.posture_trend_risk = fatigue_signals.posture_trend_risk
-            result.movement_risk = fatigue_signals.movement_risk
-            result.head_drop_risk = fatigue_signals.head_drop_risk
-            result.posture_stability_risk = fatigue_signals.posture_stability_risk
-            result.fatigue_factors = fatigue_signals.as_factors()
-            result.ergonomic_score = compute_ergonomic_score(
-                result.posture_score,
-                continuous_sit_seconds=result.sit_seconds,
-                face_distance=result.face_distance,
-                continuous_gaze_seconds=self.gaze_tracker.continuous_gaze_seconds,
-            )
-            result.fatigue_score = compute_fatigue_score(
-                posture_score=result.posture_score,
-                continuous_sit_seconds=result.sit_seconds,
-                face_distance=result.face_distance,
-                continuous_gaze_seconds=self.gaze_tracker.continuous_gaze_seconds,
-                posture_trend_risk=fatigue_signals.posture_trend_risk,
-                movement_risk=fatigue_signals.movement_risk,
-                head_drop_risk=fatigue_signals.head_drop_risk,
-                posture_stability_risk=fatigue_signals.posture_stability_risk,
-                spine_score=getattr(result, "spine_score", None),
-                shoulder_elevation_risk=getattr(result, "shoulder_elevation", 0.0) or 0.0,
-            )
-            result.fatigue_level = fatigue_level(result.fatigue_score)
-            result.fatigue_advice = fatigue_advice(
-                fatigue_score=result.fatigue_score,
-                continuous_sit_seconds=result.sit_seconds,
-                continuous_gaze_seconds=self.gaze_tracker.continuous_gaze_seconds,
-                face_distance=result.face_distance,
-            )
+        alerts = self.session.process(result, motion_level=motion_level)
 
         self._last_result = result
         self.metrics_updated.emit(result)
 
-        if not result.skipped and self.temporal_filter.update(result.status == "bad"):
-            self.alert_triggered.emit(result)
-
-        if self.sit_tracker.needs_break_alert():
-            self.alert_triggered.emit(
-                PostureResult(
-                    status="bad",
-                    issues=["Tanaffus qiling!"],
-                    sit_seconds=result.sit_seconds,
-                    ergonomic_score=result.ergonomic_score,
-                    break_alert=True,
-                )
-            )
-
-        if self.gaze_tracker.needs_gaze_alert():
-            self.alert_triggered.emit(
-                PostureResult(
-                    status="bad",
-                    issues=["20-20-20!"],
-                    sit_seconds=result.sit_seconds,
-                    ergonomic_score=result.ergonomic_score,
-                )
-            )
-
-        if result.fatigue_score is not None and self.fatigue_tracker.needs_fatigue_alert(result.fatigue_score):
-            self.alert_triggered.emit(
-                PostureResult(
-                    status="bad",
-                    issues=["Charchoq belgilari: tanaffus qiling!"],
-                    sit_seconds=result.sit_seconds,
-                    ergonomic_score=result.ergonomic_score,
-                    fatigue_score=result.fatigue_score,
-                    fatigue_level=result.fatigue_level,
-                    fatigue_advice=result.fatigue_advice,
-                    fatigue_alert=True,
-                )
-            )
+        for alert_event in alerts:
+            self.alert_triggered.emit(alert_event.result)
 
     @staticmethod
     def _draw_landmark_overlay(frame, landmarks, result: PostureResult):
@@ -327,7 +248,7 @@ class CameraWorker(QThread):
             ok, frame = self.detector.read()
             if not ok:
                 consecutive_fails += 1
-                self.sit_tracker.observe(person_present=False)
+                self.session.sit_tracker.observe(person_present=False)
                 if consecutive_fails >= self.MAX_CONSECUTIVE_FAILS:
                     logger.warning(f"{consecutive_fails} ta ketma-ket xato, reconnect...")
                     if self._reconnect_camera():

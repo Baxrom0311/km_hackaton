@@ -13,13 +13,13 @@ Ishlash tartibi:
 from __future__ import annotations
 
 import ctypes
-import logging
+
 import platform
 import subprocess
 from dataclasses import dataclass, field
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 _SYSTEM = platform.system()
 

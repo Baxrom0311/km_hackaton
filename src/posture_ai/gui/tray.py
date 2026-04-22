@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
-import logging
+
 import queue
 import threading
 import time
@@ -11,7 +11,7 @@ from typing import Any
 from posture_ai.os_utils.dimmer import ScreenDimmer
 from posture_ai.os_utils.notifier import send_notification
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 @dataclass(slots=True)

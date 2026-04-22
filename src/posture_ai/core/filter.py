@@ -11,7 +11,7 @@ class TemporalFilter:
     window_size: int = 90
     threshold: float = 0.70
     cooldown_sec: float = 60.0
-    time_fn: Callable[[], float] = time.time
+    time_fn: Callable[[], float] = time.monotonic
     window: deque[int] = field(init=False)
     last_alert_time: float = field(default=float("-inf"), init=False)
 
