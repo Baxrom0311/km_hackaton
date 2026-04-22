@@ -9,7 +9,7 @@ Tailscale-style ishlaydi:
 """
 
 import sys
-from loguru import logger
+from posture_ai.core.logger import logger
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QSystemTrayIcon, QMenu, QStackedWidget, QFrame,

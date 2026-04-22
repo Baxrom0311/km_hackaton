@@ -11,7 +11,7 @@ import shlex
 import subprocess
 from pathlib import Path
 from xml.sax.saxutils import escape
-from loguru import logger
+from posture_ai.core.logger import logger
 
 APP_NAME = "PostureAI"
 

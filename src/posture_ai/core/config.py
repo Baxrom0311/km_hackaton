@@ -1,9 +1,10 @@
 from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 import json
-from loguru import logger
+from posture_ai.core.logger import logger
 import os
 import sys
+import tempfile
 
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -58,13 +59,24 @@ class AppConfig(BaseModel):
     fatigue_alert_cooldown_seconds: int = Field(default=600, ge=60, le=3600)
 
 def get_app_data_dir() -> Path:
-    app_data_dir = (
-        Path(os.getenv("APPDATA", "~")).expanduser()
-        if os.name == "nt"
-        else Path.home() / ".config" / "PostureAI"
-    )
-    app_data_dir.mkdir(parents=True, exist_ok=True)
-    return app_data_dir
+    if os.name == "nt":
+        app_data_dir = Path(os.getenv("APPDATA", "~")).expanduser() / "PostureAI"
+    else:
+        app_data_dir = Path.home() / ".config" / "PostureAI"
+    try:
+        app_data_dir.mkdir(parents=True, exist_ok=True)
+        return app_data_dir
+    except OSError as exc:
+        logger.warning("App data papkasiga yozib bo'lmadi ({}), lokal fallback ishlatiladi", exc)
+
+    fallback_dir = Path(tempfile.gettempdir()) / "PostureAI"
+    try:
+        fallback_dir.mkdir(parents=True, exist_ok=True)
+        return fallback_dir
+    except OSError:
+        local_dir = Path.cwd() / "local_test_logs" / "PostureAI"
+        local_dir.mkdir(parents=True, exist_ok=True)
+        return local_dir
 
 
 def get_config_path() -> Path:

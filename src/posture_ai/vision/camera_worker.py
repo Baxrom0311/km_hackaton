@@ -1,5 +1,5 @@
 from PySide6.QtCore import QThread, Signal
-from loguru import logger
+from posture_ai.core.logger import logger
 import time
 import cv2
 import numpy as np

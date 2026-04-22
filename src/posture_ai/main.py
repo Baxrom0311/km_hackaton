@@ -16,9 +16,15 @@ import sys
 import threading
 from pathlib import Path
 
-from loguru import logger
+from posture_ai.core.logger import logger
 
-from posture_ai.core.config import AppConfig, get_default_db_path, load_config, resolve_model_asset_path
+from posture_ai.core.config import (
+    AppConfig,
+    get_app_data_dir,
+    get_default_db_path,
+    load_config,
+    resolve_model_asset_path,
+)
 from posture_ai.core.forecast import forecast_risk
 from posture_ai.database.storage import Storage
 from posture_ai.vision.detector import PoseDetector, check_runtime_dependencies
@@ -28,10 +34,7 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 
 def configure_logging() -> None:
-    log_dir = Path.home() / ".config" / "PostureAI" / "logs"
-    if sys.platform == "win32":
-        log_dir = Path(os.getenv("APPDATA", "~")).expanduser() / "PostureAI" / "logs"
-
+    log_dir = get_app_data_dir() / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
     logger.add(

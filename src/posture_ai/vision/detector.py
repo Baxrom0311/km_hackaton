@@ -17,6 +17,12 @@ from queue import Queue
 from typing import Any, Sequence
 
 from posture_ai.core.config import resolve_model_asset_path
+from posture_ai.core.ergonomics import (
+    estimate_face_camera_distance,
+    eye_strain_risk,
+    is_facing_camera,
+)
+from posture_ai.core.logger import logger
 from posture_ai.core.session import SessionProcessor
 from posture_ai.vision.metrics import (
     REQUIRED_LANDMARKS,
@@ -49,16 +55,13 @@ __all__ = [
     "run_detection_loop",
 ]
 
-from loguru import logger
-
-
 class DependencyUnavailableError(RuntimeError):
     pass
 
 
 def check_runtime_dependencies() -> list[str]:
     missing: list[str] = []
-    for module_name in ("cv2", "mediapipe"):
+    for module_name in ("cv2", "mediapipe", "PySide6"):
         if importlib.util.find_spec(module_name) is None:
             missing.append(module_name)
     return missing
@@ -419,7 +422,7 @@ def run_detection_loop(
 
     fps = max(int(config.get("fps", 10)), 1)
     frame_interval = 1.0 / fps
-    
+
     session = SessionProcessor(
         temporal_filter=TemporalFilter(
             window_size=int(config["temporal_window_size"]),

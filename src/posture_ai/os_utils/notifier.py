@@ -6,7 +6,7 @@ import platform
 import subprocess
 from typing import Sequence
 
-from loguru import logger
+from posture_ai.core.logger import logger
 
 ISSUE_MESSAGES = {
     "Boshingizni ko'taring!": "Boshingizni ko'taring! Oldinga engashib ketibsiz.",
@@ -87,5 +87,5 @@ def send_notification(title: str, message: str = "", issues: Sequence[str] | Non
     except Exception:
         logger.exception("Notification could not be delivered")
 
-    logger.warning("%s: %s", title, body)
+    logger.warning("{}: {}", title, body)
     return False

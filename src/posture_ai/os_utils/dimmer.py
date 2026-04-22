@@ -19,7 +19,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Any
 
-from loguru import logger
+from posture_ai.core.logger import logger
 
 _SYSTEM = platform.system()
 
@@ -112,7 +112,7 @@ def _linux_set_brightness(level: float) -> bool:
             )
             success = True
         except Exception:
-            logger.debug("xrandr brightness %s uchun ishlamadi: %s", output, level)
+            logger.debug("xrandr brightness {} uchun ishlamadi: {}", output, level)
     return success
 
 
@@ -191,7 +191,7 @@ class ScreenDimmer:
         elif _SYSTEM == "Linux":
             success = _linux_set_brightness(self.dim_level)
         else:
-            logger.info("Screen dim: %s platformasi uchun qo'llab-quvvatlanmaydi", _SYSTEM)
+            logger.info("Screen dim: {} platformasi uchun qo'llab-quvvatlanmaydi", _SYSTEM)
 
         if success:
             self.is_dimmed = True

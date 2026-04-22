@@ -11,7 +11,7 @@ from typing import Any
 from posture_ai.os_utils.dimmer import ScreenDimmer
 from posture_ai.os_utils.notifier import send_notification
 
-from loguru import logger
+from posture_ai.core.logger import logger
 
 
 @dataclass(slots=True)

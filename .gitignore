@@ -26,6 +26,7 @@ Thumbs.db
 
 # PostureAI runtime data
 posture.db
+test_sqlite_tmp.db*
 local_test_logs/
 test_uchun_loglar/
 screenshots/

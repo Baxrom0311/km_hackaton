@@ -81,7 +81,7 @@ PostureAI — kompyuter webcami orqali foydalanuvchining o'tirish pozitsiyasini 
 │  ├── Holt Double Exp. Smoothing (45%) — trend + tezlik             │
 │  └── Weighted Moving Average (25%) — oxirgi kunlar og'irligi       │
 │                                                                     │
-│  Pain Probability = sigmoid(8 * (avg_risk/100 - 0.45))            │
+│  Pain Probability = sigmoid(6 * (blended_risk/100 - 0.55))        │
 │  → 30 kunlik og'riq ehtimoli (0-95%)                              │
 │  → Xavf kategoriyasi: low / moderate / high / critical             │
 │  → Shaxsiy tavsiya + Mashq rejasi                                 │
@@ -177,7 +177,7 @@ har 100ms (10 FPS):
   1. weekly = storage.get_weekly_summary()      → 7 kunlik o'rtachalar
   2. daily_risks = [100 - score for score in weekly]
   3. ensemble_predict(daily_risks, days_ahead)   → 3 model birlashtiriladi
-  4. pain_prob = sigmoid(8 * (risk/100 - 0.45)) → og'riq ehtimoli
+  4. pain_prob = sigmoid(6 * (blended_risk/100 - 0.55)) → og'riq ehtimoli
   5. recommendation = build_recommendation(category, slope)
   6. exercises = recommend_exercises(frequent_issues)
 ```

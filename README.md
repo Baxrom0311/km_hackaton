@@ -59,6 +59,11 @@ python main.py --stats
 
 `config.json`, `posture.db` va audio cache fayllari `~/.config/PostureAI/` ichida saqlanadi. Windows'da ular `%APPDATA%/PostureAI/` ga yoziladi.
 
+### Testlarni Ishga Tushirish
+```bash
+python -m unittest discover -v
+```
+
 ### Dasturni Qadoqlash (.exe / .app)
 ```bash
 pip install pyinstaller

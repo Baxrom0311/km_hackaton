@@ -4,7 +4,7 @@ import sys
 import subprocess
 import threading
 from pathlib import Path
-from loguru import logger
+from posture_ai.core.logger import logger
 
 from posture_ai.core.config import get_app_data_dir
 

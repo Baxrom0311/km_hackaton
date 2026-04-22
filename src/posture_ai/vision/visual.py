@@ -10,7 +10,6 @@ threading ishlatmaydi — barcha logika bir loop ichida.
 
 from __future__ import annotations
 
-import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,9 +27,8 @@ from posture_ai.core.ergonomics import (
     fatigue_level,
 )
 from posture_ai.core.filter import TemporalFilter
+from posture_ai.core.logger import logger
 from posture_ai.os_utils.notifier import send_notification
-
-from loguru import logger
 
 
 # BlazePose 33 landmark uchun asosiy skelet ulanishlari (chiziqlar)
@@ -179,19 +177,19 @@ def handle_visual_key(key: int, controls: VisualControls) -> bool:
         return True
     if key == ord("d"):
         controls.show_landmarks = not controls.show_landmarks
-        logger.info("Visual: debug lines %s", "ON" if controls.show_landmarks else "OFF")
+        logger.info("Visual: debug lines {}", "ON" if controls.show_landmarks else "OFF")
     elif key == ord("i"):
         controls.show_info = not controls.show_info
-        logger.info("Visual: info panel %s", "ON" if controls.show_info else "OFF")
+        logger.info("Visual: info panel {}", "ON" if controls.show_info else "OFF")
     elif key == ord("h"):
         controls.show_help = not controls.show_help
-        logger.info("Visual: help panel %s", "ON" if controls.show_help else "OFF")
+        logger.info("Visual: help panel {}", "ON" if controls.show_help else "OFF")
     elif key == ord("n"):
         controls.notifications_enabled = not controls.notifications_enabled
-        logger.info("Visual: notifications %s", "ON" if controls.notifications_enabled else "OFF")
+        logger.info("Visual: notifications {}", "ON" if controls.notifications_enabled else "OFF")
     elif key == ord(" "):
         controls.paused = not controls.paused
-        logger.info("Visual: %s", "PAUSED" if controls.paused else "RESUMED")
+        logger.info("Visual: {}", "PAUSED" if controls.paused else "RESUMED")
     elif key == ord("s"):
         controls.screenshot_requested = True
     elif key == ord("f"):
@@ -317,7 +315,7 @@ def run_visual_loop(
                     )
                     if result.skipped and result.reason == "low_visibility":
                         vis = {idx: round(landmarks[idx].visibility, 2) for idx in REQUIRED_LANDMARKS}
-                        logger.debug("low_visibility — landmark visibility: %s", vis)
+                        logger.debug("low_visibility — landmark visibility: {}", vis)
 
                 person_present = not result.skipped and result.posture_score is not None
                 sit_tracker.observe(person_present=person_present)
@@ -374,12 +372,12 @@ def run_visual_loop(
                     ts = time.strftime("%Y%m%d_%H%M%S")
                     path = screenshot_dir / f"postureai_{ts}.png"
                     cv2.imwrite(str(path), frame)
-                    logger.info("Screenshot saqlandi: %s", path)
+                    logger.info("Screenshot saqlandi: {}", path)
 
                 if controls.notifications_enabled and not result.skipped and temporal_filter.update(result.status == "bad"):
                     send_notification("PostureAI", issues=result.issues)
                     storage.log_alert(result.issues, timestamp=result.timestamp)
-                    logger.info("Posture alert: %s", " | ".join(result.issues))
+                    logger.info("Posture alert: {}", " | ".join(result.issues))
                     if dim_enabled:
                         dimmer.dim()
 
